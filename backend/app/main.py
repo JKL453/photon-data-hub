@@ -1,0 +1,59 @@
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from sqlalchemy import text
+from app.core.config import settings
+from app.core.security import hash_password
+import socket
+
+from app.models import User
+from app.schemas.user import UserCreate, UserRead
+
+app = FastAPI(title="PhotonDataHub API")
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+def _tcp_check(host: str, port: int, timeout_s: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
+
+@app.get("/health/ready")
+def ready():
+    db_ok = _tcp_check(settings.postgres_host, settings.postgres_port)
+    s3_ok = _tcp_check("minio", 9000)
+
+    status = "ok" if (db_ok and s3_ok) else "degraded"
+    return {
+        "status": status,
+        "checks": {
+            "db_tcp": db_ok,
+            "minio_tcp": s3_ok,
+        },
+    }
+
+@app.get("/health/db-test")
+def db_test(db: Session = Depends(get_db)):
+    result = db.execute(text("SELECT 1")).scalar()
+    return {"db_test": result}
+
+@app.post("/users", response_model=UserRead)
+def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
+    user = User(
+        email=user_in.email,
+        hashed_password=hash_password(user_in.password),
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Email already registered")
+    db.refresh(user)
+    return user
