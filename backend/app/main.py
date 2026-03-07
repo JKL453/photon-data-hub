@@ -7,11 +7,13 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.core.security import hash_password
 import socket
+import uuid
 
 from app.models import User
 from app.schemas.user import UserCreate, UserRead
 
 app = FastAPI(title="PhotonDataHub API")
+
 
 @app.get("/health")
 def health():
@@ -23,6 +25,7 @@ def _tcp_check(host: str, port: int, timeout_s: float = 1.0) -> bool:
             return True
     except OSError:
         return False
+
 
 @app.get("/health/ready")
 def ready():
@@ -38,10 +41,12 @@ def ready():
         },
     }
 
+
 @app.get("/health/db-test")
 def db_test(db: Session = Depends(get_db)):
     result = db.execute(text("SELECT 1")).scalar()
     return {"db_test": result}
+
 
 @app.post("/users", response_model=UserRead)
 def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
@@ -56,4 +61,14 @@ def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=409, detail="Email already registered")
     db.refresh(user)
+    return user
+
+
+@app.get("/users/{user_id}", response_model=UserRead)
+def get_user(user_id: uuid.UUID, db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    
     return user
