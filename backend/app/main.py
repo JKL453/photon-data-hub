@@ -9,8 +9,9 @@ from app.core.security import hash_password
 import socket
 import uuid
 
-from app.models import User
+from app.models import User, Dataset
 from app.schemas.user import UserCreate, UserRead
+from app.schemas.dataset import DatasetCreate, DatasetRead
 
 app = FastAPI(title="PhotonDataHub API")
 
@@ -51,8 +52,8 @@ def db_test(db: Session = Depends(get_db)):
 @app.post("/users", response_model=UserRead)
 def create_user(user_in: UserCreate, db: Session = Depends(get_db)):
     user = User(
-        email=user_in.email,
-        hashed_password=hash_password(user_in.password),
+        email = user_in.email,
+        hashed_password = hash_password(user_in.password),
     )
     db.add(user)
     try:
@@ -72,3 +73,41 @@ def get_user(user_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
     
     return user
+
+
+@app.post("/datasets", response_model=DatasetRead)
+def create_dataset(
+    dataset_in: DatasetCreate,
+    owner_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    dataset = Dataset(
+        name = dataset_in.name,
+        description = dataset_in.description,
+        owner_id = owner_id,
+    )
+
+    db.add(dataset)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Dataset name already exists")
+    db.refresh(dataset)
+    return dataset
+
+
+@app.get("/datasets", response_model=list[DatasetRead])
+def list_datasets(db: Session = Depends(get_db)):
+    datasets = db.query(Dataset).all()
+    return datasets
+
+
+@app.get("/datasets/{dataset_id}", response_model=DatasetRead)
+def get_dataset(dataset_id: uuid.UUID, db: Session = Depends(get_db)):
+    dataset = db.get(Dataset, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    return dataset
