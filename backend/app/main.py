@@ -9,9 +9,10 @@ from app.core.security import hash_password
 import socket
 import uuid
 
-from app.models import User, Dataset
+from app.models import User, Dataset, File
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.dataset import DatasetCreate, DatasetRead
+from app.schemas.file import FileCreate, FileRead
 
 app = FastAPI(title="PhotonDataHub API")
 
@@ -111,3 +112,33 @@ def get_dataset(dataset_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Dataset not found")
     
     return dataset
+
+
+@app.post("/files", response_model=FileRead)
+def create_file(
+    file_in: FileCreate,
+    db: Session = Depends(get_db),
+):
+    file = File(
+        filename=file_in.filename,
+        object_key=file_in.object_key,
+        dataset_id=file_in.dataset_id,
+    )
+
+    db.add(file)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="File already exists")
+    db.refresh(file)
+    return file
+
+
+@app.get("/datasets/{dataset_id}/files", response_model=list[FileRead])
+def list_files_for_dataset(
+    dataset_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    files = db.query(File).filter(File.dataset_id == dataset_id).all()
+    return files
