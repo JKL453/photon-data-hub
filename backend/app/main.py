@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File as FastAPIFile
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from app.models import User, Dataset, File
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.dataset import DatasetCreate, DatasetRead
 from app.schemas.file import FileCreate, FileRead
+from app.services.storage import upload_fileobj
 
 app = FastAPI(title="PhotonDataHub API")
 
@@ -142,3 +143,33 @@ def list_files_for_dataset(
 ):
     files = db.query(File).filter(File.dataset_id == dataset_id).all()
     return files
+
+
+@app.post("/datasets/{dataset_id}/upload", response_model=FileRead)
+def upload_dataset_file(
+    dataset_id: uuid.UUID,
+    uploaded_file: UploadFile = FastAPIFile(...),
+    db: Session = Depends(get_db),
+):
+    object_key = f"datasets/{dataset_id}/{uploaded_file.filename}"
+
+    upload_fileobj(
+        file_object=uploaded_file.file,
+        object_key=object_key,
+        content_type=uploaded_file.content_type,
+    )
+
+    file_record = File(
+        filename=uploaded_file.filename,
+        object_key=object_key,
+        dataset_id=dataset_id,
+    )
+
+    db.add(file_record)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="File already exists")
+    db.refresh(file_record)
+    return file_record
