@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     postgres_port: int = Field(5432, alias="POSTGRES_PORT")
 
     s3_endpoint: str = Field(..., alias="S3_ENDPOINT")
+    s3_public_endpoint: str = Field(..., alias="S3_PUBLIC_ENDPOINT")
     s3_access_key: str = Field(..., alias="S3_ACCESS_KEY")
     s3_secret_key: str = Field(..., alias="S3_SECRET_KEY")
     s3_bucket: str = Field(..., alias="S3_BUCKET")

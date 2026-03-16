@@ -14,7 +14,18 @@ def get_s3_client():
     )
 
 
-def upload_fileobj(file_object, object_key: str, content_type: str | None = None):
+def get_s3_public_client(object_key: str) -> str:
+    s3_public = boto3.client(
+        "s3",
+        endpoint_url=settings.s3_public_endpoint,
+        aws_access_key_id=settings.s3_access_key,
+        aws_secret_access_key=settings.s3_secret_key,
+        region_name=settings.s3_region,
+    )
+    return s3_public
+
+
+def upload_fileobj(file_obj, object_key: str, content_type: str | None = None):
     s3 = get_s3_client()
     extra_args = {}
 
@@ -23,14 +34,14 @@ def upload_fileobj(file_object, object_key: str, content_type: str | None = None
 
     if extra_args:
         s3.upload_fileobj(
-            Fileobj=file_object,
+            Fileobj=file_obj,
             Bucket=settings.s3_bucket,
             Key=object_key,
             ExtraArgs=extra_args,
         )
     else:
         s3.upload_fileobj(
-            Fileobj=file_object,
+            Fileobj=file_obj,
             Bucket=settings.s3_bucket,
             Key=object_key,
         )

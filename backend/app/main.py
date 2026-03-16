@@ -13,7 +13,8 @@ from app.models import User, Dataset, File
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.dataset import DatasetCreate, DatasetRead
 from app.schemas.file import FileCreate, FileRead
-from app.services.storage import upload_fileobj
+from app.services.storage import upload_fileobj, get_s3_public_client
+from app.core.config import settings
 
 app = FastAPI(title="PhotonDataHub API")
 
@@ -173,3 +174,27 @@ def upload_dataset_file(
         raise HTTPException(status_code=409, detail="File already exists")
     db.refresh(file_record)
     return file_record
+
+
+@app.get("/files/{file_id}/download")
+def get_file_download_url(
+    file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    file = db.query(File).filter(File.id == file_id).first()
+
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    s3 = get_s3_public_client(object_key=file.object_key)
+
+    url = s3.generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": settings.s3_bucket,
+            "Key": file.object_key,
+        },
+        ExpiresIn=3600,
+    )
+
+    return {"download_url": url}
