@@ -38,4 +38,4 @@ class Dataset(Base):
     )
 
     owner = relationship("User", back_populates="datasets")
-    files = relationship("File", back_populates="dataset")
+    files = relationship("File", back_populates="dataset", cascade="all, delete")

@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File as FastAPIFile
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import text, select, func
 
 from app.db.session import get_db
-from sqlalchemy import text
 from app.core.config import settings
 from app.core.security import hash_password
 import socket
@@ -11,7 +11,7 @@ import uuid
 
 from app.models import User, Dataset, File
 from app.schemas.user import UserCreate, UserRead
-from app.schemas.dataset import DatasetCreate, DatasetRead
+from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead
 from app.schemas.file import FileCreate, FileRead
 from app.services.storage import upload_fileobj, get_s3_public_client
 from app.core.config import settings
@@ -100,15 +100,47 @@ def create_dataset(
     return dataset
 
 
-@app.get("/datasets", response_model=list[DatasetRead])
+@app.get("/datasets", response_model=list[DatasetListRead])
 def list_datasets(db: Session = Depends(get_db)):
-    datasets = db.query(Dataset).all()
-    return datasets
+    rows = (db.query(
+        Dataset.id,
+        Dataset.name,
+        Dataset.description,
+        Dataset.created_at,
+        Dataset.owner_id,
+        func.count(File.id).label("file_count"),
+    )
+    .outerjoin(File, File.dataset_id == Dataset.id)
+    .group_by(
+            Dataset.id,
+            Dataset.name,
+            Dataset.description,
+            Dataset.created_at,
+            Dataset.owner_id,
+        )
+        .all()
+    )
+    return [
+        {
+            "id": row.id,
+            "name": row.name,
+            "description": row.description,
+            "created_at": row.created_at,
+            "owner_id": row.owner_id,
+            "file_count": row.file_count,
+        }
+        for row in rows
+    ]
 
 
 @app.get("/datasets/{dataset_id}", response_model=DatasetRead)
 def get_dataset(dataset_id: uuid.UUID, db: Session = Depends(get_db)):
-    dataset = db.get(Dataset, dataset_id)
+    stmt = (
+        select(Dataset)
+        .options(selectinload(Dataset.files))
+        .where(Dataset.id == dataset_id)
+    )
+    dataset = db.execute(stmt).scalars_one_or_none()
 
     if dataset is None:
         raise HTTPException(status_code=404, detail="Dataset not found")
@@ -134,6 +166,18 @@ def create_file(
         db.rollback()
         raise HTTPException(status_code=409, detail="File already exists")
     db.refresh(file)
+    return file
+
+
+@app.get("/files/{file_id}", response_model=FileRead)
+def get_file(file_id: uuid.UUID, 
+             db: Session = Depends(get_db)
+             ):
+    file = db.query(File).filter(File.id == file_id).first()
+
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
     return file
 
 
