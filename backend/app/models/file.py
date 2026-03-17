@@ -30,3 +30,5 @@ class File(Base):
     )
 
     dataset = relationship("Dataset", back_populates="files")
+    previews = relationship("FilePreview", back_populates="file", 
+                            cascade="all, delete-orphan")

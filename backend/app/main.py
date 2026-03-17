@@ -9,10 +9,11 @@ from app.core.security import hash_password
 import socket
 import uuid
 
-from app.models import User, Dataset, File
+from app.models import User, Dataset, File, FilePreview
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead
 from app.schemas.file import FileCreate, FileRead
+from app.schemas.file_preview import FilePreviewRead
 from app.services.storage import upload_fileobj, get_s3_public_client
 from app.core.config import settings
 
@@ -120,6 +121,7 @@ def list_datasets(db: Session = Depends(get_db)):
         )
         .all()
     )
+    
     return [
         {
             "id": row.id,
@@ -242,3 +244,31 @@ def get_file_download_url(
     )
 
     return {"download_url": url}
+    
+
+@app.post("/files/{file_id}/previews", response_model=FilePreviewRead)
+def create_preview(file_id: uuid.UUID, db: Session = Depends(get_db)):
+    preview = FilePreview(
+        file_id=file_id,
+        preview_type="trace_thumb",
+        preview_data={
+            "x": [0, 1, 2 ,3],
+            "y": [10, 20, 15, 25],
+        },
+    )
+
+    db.add(preview)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Preview already exists")
+    db.refresh(preview)
+
+    return preview
+
+
+@app.get("/files/{file_id}/previews", response_model=list[FilePreviewRead])
+def get_previews(file_id: uuid.UUID, db: Session = Depends(get_db)):
+    previews = db.query(FilePreview).filter(FilePreview.file_id == file_id).all()
+    return previews
