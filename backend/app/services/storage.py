@@ -45,3 +45,12 @@ def upload_fileobj(file_obj, object_key: str, content_type: str | None = None):
             Bucket=settings.s3_bucket,
             Key=object_key,
         )
+
+
+def download_object_to_path(object_key: str, target_path: str):
+    s3 = get_s3_client()
+    s3.download_file(
+        Bucket=settings.s3_bucket,
+        Key=object_key,
+        Filename=target_path,
+    )

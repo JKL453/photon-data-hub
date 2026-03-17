@@ -15,6 +15,7 @@ from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead
 from app.schemas.file import FileCreate, FileRead
 from app.schemas.file_preview import FilePreviewRead
 from app.services.storage import upload_fileobj, get_s3_public_client
+from app.services.preview import generate_trace_thumb_from_h5
 from app.core.config import settings
 
 app = FastAPI(title="PhotonDataHub API")
@@ -201,7 +202,7 @@ def upload_dataset_file(
     object_key = f"datasets/{dataset_id}/{uploaded_file.filename}"
 
     upload_fileobj(
-        file_object=uploaded_file.file,
+        file_obj=uploaded_file.file,
         object_key=object_key,
         content_type=uploaded_file.content_type,
     )
@@ -272,3 +273,37 @@ def create_preview(file_id: uuid.UUID, db: Session = Depends(get_db)):
 def get_previews(file_id: uuid.UUID, db: Session = Depends(get_db)):
     previews = db.query(FilePreview).filter(FilePreview.file_id == file_id).all()
     return previews
+
+
+@app.post("/files/{file_id}/previews/generate-trace-thumb", response_model=FilePreviewRead)
+def generate_trace_thumb_preview(
+    file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    file = db.query(File).filter(File.id == file_id).first()
+
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    preview_data = generate_trace_thumb_from_h5(
+        object_key=file.object_key,
+        timing_resolution=5e-9,
+        bin_width_ms=10.0,
+        max_points=300,
+    )
+
+    preview = FilePreview(
+        file_id=file.id,
+        preview_type="trace_thumb",
+        preview_data=preview_data,
+    )
+
+    db.add(preview)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Preview already exists")
+    db.refresh(preview)
+
+    return preview
