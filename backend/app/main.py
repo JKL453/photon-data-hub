@@ -3,12 +3,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import text, select, func
 
+import socket
+import uuid
+from datetime import datetime, timezone
+
 from app.db.session import get_db
 from app.core.config import settings
 from app.core.security import hash_password
-import socket
-import uuid
-
 from app.models import User, Dataset, File, FilePreview
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead
@@ -292,18 +293,52 @@ def generate_trace_thumb_preview(
         max_points=300,
     )
 
-    preview = FilePreview(
-        file_id=file.id,
-        preview_type="trace_thumb",
-        preview_data=preview_data,
+    preview = (
+        db.query(FilePreview)
+        .filter(
+            FilePreview.file_id == file.id,
+            FilePreview.preview_type == "trace_thumb"
+        )
+        .first()
     )
 
-    db.add(preview)
+    if preview:
+        preview.preview_data = preview_data
+        preview.created_at = datetime.now(timezone.utc)
+    else:
+        preview = FilePreview(
+            file_id=file.id,
+            preview_type="trace_thumb",
+            preview_data=preview_data,
+        )
+        db.add(preview)
+
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="Preview already exists")
     db.refresh(preview)
+
+    return preview
+
+
+@app.get("/files/{file_id}/previews/{preview_type}", response_model=FilePreviewRead)
+def get_file_preview_by_type(
+    file_id: uuid.UUID,
+    preview_type: str,
+    db: Session = Depends(get_db),
+):
+    preview = (
+        db.query(FilePreview)
+        .filter(
+            FilePreview.file_id == file_id,
+            FilePreview.preview_type == preview_type,
+        )
+        .first()
+    )
+
+    if preview is None:
+        raise HTTPException(status_code=404, detail="Preview not found")
 
     return preview

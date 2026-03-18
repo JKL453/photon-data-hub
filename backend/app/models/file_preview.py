@@ -1,13 +1,17 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import ForeignKey, String, JSON
+from sqlalchemy import ForeignKey, String, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
 class FilePreview(Base):
     __tablename__ = "file_previews"
+
+    __table_args__ = (
+        UniqueConstraint("file_id", "preview_type", name="uq_file_preview_type"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, 
