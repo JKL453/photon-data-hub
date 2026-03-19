@@ -1,19 +1,42 @@
+# -----------------
+# Python
+# -----------------
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
+# -----------------
+# Environment
+# -----------------
 venv/
 .env/
+.env
+.env.example
 
+# -----------------
+# Logs
+# -----------------
 *.log
 
+# -----------------
+# macOS
+# -----------------
 .DS_Store
 
+# -----------------
+# VScode
+# -----------------
 .vscode
 .idea
 
-alembic/versions/__pychache__/
+# -----------------
+# Backend
+# -----------------
+alembic/versions/__pycache__/
 
-.env
-.env.example
+# -----------------
+# Frontend
+# -----------------
+frontend/node_modules/
+frontend/dist/

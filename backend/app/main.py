@@ -1,4 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File as FastAPIFile
+from fastapi.middleware.cors import CORSMiddleware
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import text, select, func
@@ -20,6 +22,13 @@ from app.services.preview import generate_trace_thumb_from_h5
 from app.core.config import settings
 
 app = FastAPI(title="PhotonDataHub API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
@@ -144,7 +153,7 @@ def get_dataset(dataset_id: uuid.UUID, db: Session = Depends(get_db)):
         .options(selectinload(Dataset.files))
         .where(Dataset.id == dataset_id)
     )
-    dataset = db.execute(stmt).scalars_one_or_none()
+    dataset = db.execute(stmt).scalar_one_or_none()
 
     if dataset is None:
         raise HTTPException(status_code=404, detail="Dataset not found")
