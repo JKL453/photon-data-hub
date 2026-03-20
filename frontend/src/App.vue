@@ -2,6 +2,8 @@
   import { ref, onMounted } from "vue"
   import axios from "axios"
 
+  import TracePreview from "./components/TracePreview.vue"
+
   const datasets = ref([])
   const selectedDataset = ref(null)
   const loadingDatasets = ref(false)
@@ -24,19 +26,44 @@
   }
 
   async function selectDataset(datasetId) {
-    loadingDatasetDetail.value = true
-    errorMessage.value = ""
+  loadingDatasetDetail.value = true
+  errorMessage.value = ""
 
-    try {
-      const response = await axios.get(`http://localhost:8000/datasets/${datasetId}`)
-      selectedDataset.value = response.data
-    } catch (error) {
-      console.error("Fehler beim Laden des Dataset-Details:", error)
-      errorMessage.value = "Dataset-Details konnten nicht geladen werden."
-    } finally {
-      loadingDatasetDetail.value = false
+  try {
+    const response = await axios.get(`http://localhost:8000/datasets/${datasetId}`)
+    const dataset = response.data
+
+    const filesWithPreviews = await Promise.all(
+      dataset.files.map(async (file) => {
+        try {
+          const previewResponse = await axios.get(
+            `http://localhost:8000/files/${file.id}/previews/trace_thumb`
+          )
+
+          return {
+            ...file,
+            preview: previewResponse.data,
+          }
+        } catch (error) {
+          return {
+            ...file,
+            preview: null,
+          }
+        }
+      })
+    )
+
+    selectedDataset.value = {
+      ...dataset,
+      files: filesWithPreviews,
     }
+  } catch (error) {
+    console.error("Fehler beim Laden des Dataset-Details:", error)
+    errorMessage.value = "Dataset-Details konnten nicht geladen werden."
+  } finally {
+    loadingDatasetDetail.value = false
   }
+}
 
   onMounted(async () => {
     await loadDatasets()
@@ -100,6 +127,11 @@
             >
               <div class="file-name">{{ file.filename }}</div>
               <div class="file-meta">{{ file.object_key }}</div>
+              <TracePreview
+                v-if="file.preview"
+                :preview="file.preview.preview_data"
+              />
+
 
               <button class="download-button" @click="downloadFile(file.id)">
                 Download

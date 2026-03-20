@@ -298,7 +298,7 @@ def generate_trace_thumb_preview(
     preview_data = generate_trace_thumb_from_h5(
         object_key=file.object_key,
         timing_resolution=5e-9,
-        bin_width_ms=10.0,
+        bin_width_ms=100.0,
         max_points=300,
     )
 
