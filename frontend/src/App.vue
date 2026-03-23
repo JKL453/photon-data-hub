@@ -1,14 +1,53 @@
 <script setup>
+
   import { ref, onMounted } from "vue"
   import axios from "axios"
 
   import TracePreview from "./components/TracePreview.vue"
 
+
   const datasets = ref([])
+  const newDatasetName = ref("")
+  const newDatasetDescription = ref("")
+  const creatingDataset = ref(false)
   const selectedDataset = ref(null)
   const loadingDatasets = ref(false)
   const loadingDatasetDetail = ref(false)
+
   const errorMessage = ref("")
+
+  
+  async function createDataset() {
+  if (!newDatasetName.value.trim()) {
+    errorMessage.value = "Bitte gib einen Dataset-Namen ein."
+    return
+  }
+
+  creatingDataset.value = true
+  errorMessage.value = ""
+
+  try {
+    const ownerId = "476a2e3b-3c01-4f90-b44e-e1011673dcf4"
+
+    await axios.post(
+      `http://localhost:8000/datasets?owner_id=${ownerId}`,
+      {
+        name: newDatasetName.value,
+        description: newDatasetDescription.value,
+      }
+    )
+
+    newDatasetName.value = ""
+    newDatasetDescription.value = ""
+
+    await loadDatasets()
+  } catch (error) {
+    console.error("Fehler beim Erstellen des Datasets:", error)
+    errorMessage.value = "Dataset konnte nicht erstellt werden."
+  } finally {
+    creatingDataset.value = false
+  }
+}
 
   async function loadDatasets() {
     loadingDatasets.value = true
@@ -82,7 +121,11 @@
 }
 </script>
 
+
+
+
 <template>
+
   <div class="page">
     <h1>Photon Data Hub</h1>
 
@@ -91,7 +134,31 @@
 
     <div class="layout">
       <section class="panel">
+
         <h2>Datasets</h2>
+
+        <div class="create-dataset-form">
+          <input
+            v-model="newDatasetName"
+            type="text"
+            placeholder="Dataset name"
+            class="text-input"
+          />
+
+          <textarea
+            v-model="newDatasetDescription"
+            placeholder="Description"
+            class="text-input textarea-input"
+          ></textarea>
+
+          <button
+            class="primary-button"
+            @click="createDataset"
+            :disabled="creatingDataset"
+          >
+            {{ creatingDataset ? "Creating..." : "Create Dataset" }}
+          </button>
+        </div>
 
         <ul class="dataset-list">
           <li
@@ -254,5 +321,45 @@ h4 {
 .empty-state {
   color: #666;
   font-style: italic;
+}
+
+.create-dataset-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.text-input {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid #d9deea;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
+.textarea-input {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.primary-button {
+  padding: 0.7rem 1rem;
+  border: none;
+  border-radius: 10px;
+  background: #2f6fed;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.primary-button:hover {
+  background: #255dd0;
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

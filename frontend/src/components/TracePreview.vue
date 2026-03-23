@@ -27,10 +27,14 @@ const props = defineProps({
   },
 })
 
-const channelColors = {
-  0: "#2f6fed",
-  1: "#f08a24",
-}
+const defaultColors = [
+  "#2f6fed",
+  "#f08a24",
+  "#2ecc71",
+  "#e74c3c",
+  "#9b59b6",
+  "#f1c40f",
+]
 
 const chartData = computed(() => {
   const x = props.preview.x ?? []
@@ -38,14 +42,14 @@ const chartData = computed(() => {
 
   return {
     labels: x,
-    datasets: series.map((s) => ({
-      label: s.label,
-      data: s.y,
-      borderWidth: 2,
-      pointRadius: 0,
-      tension: 0,
-      borderColor: channelColors[s.channel] ?? "#2f6fedcc6",
-    })),
+    datasets: series.map((s, i) => ({
+    label: s.label,
+    data: s.y,
+    borderWidth: 2,
+    pointRadius: 0,
+    tension: 0,
+    borderColor: defaultColors[i % defaultColors.length],
+  })),
   }
 })
 
