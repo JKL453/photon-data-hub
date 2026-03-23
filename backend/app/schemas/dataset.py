@@ -28,3 +28,8 @@ class DatasetListRead(BaseModel):
     created_at: datetime
     owner_id: uuid.UUID
     file_count: int
+
+
+class DatasetUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None

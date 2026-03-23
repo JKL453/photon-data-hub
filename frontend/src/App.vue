@@ -7,12 +7,16 @@
 
 
   const datasets = ref([])
+
   const newDatasetName = ref("")
   const newDatasetDescription = ref("")
   const creatingDataset = ref(false)
   const selectedDataset = ref(null)
   const loadingDatasets = ref(false)
   const loadingDatasetDetail = ref(false)
+  const editDatasetName = ref("")
+  const editDatasetDescription = ref("")
+  const savingDataset = ref(false)
 
   const errorMessage = ref("")
 
@@ -102,6 +106,8 @@
   } finally {
     loadingDatasetDetail.value = false
   }
+  editDatasetName.value = selectedDataset.value.name
+  editDatasetDescription.value = selectedDataset.value.description
 }
 
   onMounted(async () => {
@@ -119,6 +125,39 @@
     errorMessage.value = "Datei konnte nicht heruntergeladen werden."
   }
 }
+
+
+async function updateDataset() {
+  if (!selectedDataset.value) return
+
+  savingDataset.value = true
+  errorMessage.value = ""
+
+  try {
+    await axios.patch(
+      `http://localhost:8000/datasets/${selectedDataset.value.id}`,
+      {
+        name: editDatasetName.value,
+        description: editDatasetDescription.value,
+      }
+    )
+
+    // direkt UI aktualisieren
+    selectedDataset.value.name = editDatasetName.value
+    selectedDataset.value.description = editDatasetDescription.value
+
+    // linke Liste neu laden
+    await loadDatasets()
+
+  } catch (error) {
+    console.error("Fehler beim Update:", error)
+    errorMessage.value = "Dataset konnte nicht aktualisiert werden."
+  } finally {
+    savingDataset.value = false
+  }
+}
+
+
 </script>
 
 
@@ -181,8 +220,27 @@
         <p v-if="loadingDatasetDetail">Dataset-Details werden geladen ...</p>
 
         <div v-else-if="selectedDataset">
-          <h3>{{ selectedDataset.name }}</h3>
-          <p>{{ selectedDataset.description }}</p>
+          <div class="edit-dataset-form">
+            <input
+              v-model="editDatasetName"
+              class="text-input"
+              placeholder="Dataset name"
+            />
+
+            <textarea
+              v-model="editDatasetDescription"
+              class="text-input textarea-input"
+              placeholder="Description"
+            ></textarea>
+
+            <button
+              class="primary-button"
+              @click="updateDataset"
+              :disabled="savingDataset"
+            >
+              {{ savingDataset ? "Saving..." : "Save changes" }}
+            </button>
+          </div>
 
           <h4>Files</h4>
 
@@ -361,5 +419,12 @@ h4 {
 .primary-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.edit-dataset-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 </style>

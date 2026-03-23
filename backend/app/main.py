@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.security import hash_password
 from app.models import User, Dataset, File, FilePreview
 from app.schemas.user import UserCreate, UserRead
-from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead
+from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead, DatasetUpdate
 from app.schemas.file import FileCreate, FileRead
 from app.schemas.file_preview import FilePreviewRead
 from app.services.storage import upload_fileobj, get_s3_public_client
@@ -158,6 +158,32 @@ def get_dataset(dataset_id: uuid.UUID, db: Session = Depends(get_db)):
     if dataset is None:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
+    return dataset
+
+
+@app.patch("/datasets/{dataset_id}", response_model=DatasetRead)
+def update_dataset(
+    dataset_id: uuid.UUID,
+    dataset_in: DatasetUpdate,
+    db: Session = Depends(get_db),
+):
+    dataset = db.get(Dataset, dataset_id)
+
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    if dataset_in.name is not None:
+        dataset.name = dataset_in.name
+    if dataset_in.description is not None:
+        dataset.description = dataset_in.description
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Dataset name already exists")
+    
+    db.refresh(dataset)
     return dataset
 
 
