@@ -17,7 +17,7 @@ from app.schemas.user import UserCreate, UserRead
 from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead, DatasetUpdate
 from app.schemas.file import FileCreate, FileRead
 from app.schemas.file_preview import FilePreviewRead
-from app.services.storage import upload_fileobj, get_s3_public_client
+from app.services.storage import upload_fileobj, get_s3_public_client, delete_object
 from app.services.preview import generate_trace_thumb_from_h5
 from app.core.config import settings
 
@@ -377,3 +377,27 @@ def get_file_preview_by_type(
         raise HTTPException(status_code=404, detail="Preview not found")
 
     return preview
+
+
+@app.delete("/files/{file_id}")
+def delete_file(file_id: uuid.UUID,
+                db: Session = Depends(get_db),
+                ):
+    file = db.query(File).filter(File.id == file_id).first()
+    
+    if file is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    object_key = file.object_key
+    
+    delete_object(object_key)
+    
+    db.delete(file)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error deleting file record")
+    
+    return {"detail": "File deleted"}

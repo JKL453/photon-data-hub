@@ -54,3 +54,11 @@ def download_object_to_path(object_key: str, target_path: str):
         Key=object_key,
         Filename=target_path,
     )
+
+
+def delete_object(object_key: str):
+    s3 = get_s3_client()
+    s3.delete_object(
+        Bucket=settings.s3_bucket,
+        Key=object_key,
+    )

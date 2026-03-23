@@ -157,6 +157,20 @@ async function updateDataset() {
   }
 }
 
+async function deleteFile(fileId) {
+  try {
+    await axios.delete(`http://localhost:8000/files/${fileId}`)
+
+    if (selectedDataset.value) {
+      await selectDataset(selectedDataset.value.id)
+    }
+
+    await loadDatasets()
+  } catch (error) {
+    console.error("Fehler beim Löschen der Datei:", error)
+    errorMessage.value = "Datei konnte nicht gelöscht werden."
+  }
+}
 
 </script>
 
@@ -258,9 +272,14 @@ async function updateDataset() {
               />
 
 
-              <button class="download-button" @click="downloadFile(file.id)">
+              <button class="download-button small-button" @click="downloadFile(file.id)">
                 Download
               </button>
+
+              <button class="danger-button small-button" @click="deleteFile(file.id)">
+                Delete
+              </button>
+  
             </li>
           </ul>
 
@@ -273,7 +292,9 @@ async function updateDataset() {
       </section>
     </div>
   </div>
+
 </template>
+
 
 <style scoped>
   .page {
@@ -426,5 +447,27 @@ h4 {
   flex-direction: column;
   gap: 0.75rem;
   margin-bottom: 1rem;
+}
+
+.danger-button {
+  margin-top: 0.5rem;
+  margin-left: 0.5rem;
+  padding: 0.45rem 0.8rem;
+  border: none;
+  border-radius: 10px;
+  background: #d9534f;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.danger-button:hover {
+  background: #c63f3b;
+}
+
+.small-button {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 8px;
 }
 </style>
