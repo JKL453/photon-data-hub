@@ -401,3 +401,29 @@ def delete_file(file_id: uuid.UUID,
         raise HTTPException(status_code=500, detail="Error deleting file record")
     
     return {"detail": "File deleted"}
+
+
+@app.delete("/datasets/{dataset_id}")
+def delete_dataset(dataset_id: uuid.UUID, 
+                   db: Session = Depends(get_db),
+                   ):
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    files = db.query(File).filter(File.dataset_id == dataset_id).all()
+
+    for file in files:
+        delete_object(file.object_key)
+        db.delete(file)
+
+    db.delete(dataset)
+
+    try:
+        db.commit()
+    except IntegrityError: 
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error deleting dataset")
+
+    return {"detail": "Dataset deleted"}

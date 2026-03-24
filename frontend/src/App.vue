@@ -157,7 +157,16 @@ async function updateDataset() {
   }
 }
 
+
 async function deleteFile(fileId) {
+  const confirmed = window.confirm(
+    "Really delete this file?"
+  )
+
+  if (!confirmed) {
+    return
+  }
+
   try {
     await axios.delete(`http://localhost:8000/files/${fileId}`)
 
@@ -169,6 +178,28 @@ async function deleteFile(fileId) {
   } catch (error) {
     console.error("Fehler beim Löschen der Datei:", error)
     errorMessage.value = "Datei konnte nicht gelöscht werden."
+  }
+}
+
+
+async function deleteDataset(datasetId) {
+  const confirmed = window.confirm(
+    "Really delete this dataset and all associated files?"
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  try {
+    await axios.delete(`http://localhost:8000/datasets/${datasetId}`)
+
+    selectedDataset.value = null
+
+    await loadDatasets()
+  } catch (error) {
+    console.error("Fehler beim Löschen des Datasets:", error)
+    errorMessage.value = "Dataset konnte nicht gelöscht werden."
   }
 }
 
@@ -255,6 +286,14 @@ async function deleteFile(fileId) {
               {{ savingDataset ? "Saving..." : "Save changes" }}
             </button>
           </div>
+
+          <button
+            class="danger-button small-button"
+            @click="deleteDataset(selectedDataset.id)"
+          >
+            Delete Dataset
+          </button>
+
 
           <h4>Files</h4>
 
