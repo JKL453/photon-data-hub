@@ -21,6 +21,9 @@
   const deletingSelectedFiles = ref(false)
   const moveTargetDatasetId = ref("")
   const movingSelectedFiles = ref(false)
+  const uploadingFiles = ref(false)
+  const uploadProgressPercent = ref(0)
+  const uploadProgressText = ref("")
 
   const errorMessage = ref("")
 
@@ -298,6 +301,74 @@ async function moveSelectedFiles() {
   }
 }
 
+
+function openFilePicker() {
+  const input = document.getElementById("dataset-file-upload")
+  if (input) {
+    input.click()
+  }
+}
+
+async function handleFileUpload(event) {
+  const files = Array.from(event.target.files || [])
+
+  if (files.length === 0 || !selectedDataset.value) {
+    return
+  }
+
+  uploadingFiles.value = true
+  uploadProgressPercent.value = 0
+  uploadProgressText.value = `Uploading 0 / ${files.length}`
+  errorMessage.value = ""
+
+  try {
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index]
+      const formData = new FormData()
+      formData.append("uploaded_file", file)
+
+      uploadProgressText.value = `Uploading ${index + 1} / ${files.length}: ${file.name}`
+
+      const response = await axios.post(
+        `http://localhost:8000/datasets/${selectedDataset.value.id}/upload`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          onUploadProgress: (progressEvent) => {
+            const total = progressEvent.total || file.size || 1
+            const fileProgress = Math.round((progressEvent.loaded / total) * 100)
+            const overallProgress = Math.round(((index + fileProgress / 100) / files.length) * 100)
+            uploadProgressPercent.value = overallProgress
+          },
+        }
+      )
+
+      const uploadedFile = response.data
+
+      try {
+        await axios.post(
+          `http://localhost:8000/files/${uploadedFile.id}/previews/generate-trace-thumb`
+        )
+      } catch (previewError) {
+        console.error("Preview-Generierung fehlgeschlagen:", previewError)
+      }
+    }
+
+    await selectDataset(selectedDataset.value.id)
+    await loadDatasets()
+  } catch (error) {
+    console.error("Upload fehlgeschlagen:", error)
+    errorMessage.value = "Upload fehlgeschlagen"
+  } finally {
+    uploadingFiles.value = false
+    uploadProgressText.value = ""
+    uploadProgressPercent.value = 0
+    event.target.value = ""
+  }
+}
+
 </script>
 
 
@@ -392,6 +463,34 @@ async function moveSelectedFiles() {
 
           <h4>Files</h4>
 
+          <div class="upload-section">
+            <input
+              id="dataset-file-upload"
+              class="hidden-file-input"
+              type="file"
+              multiple
+              @change="handleFileUpload"
+            />
+
+            <button
+              class="primary-button small-button"
+              @click="openFilePicker"
+              :disabled="uploadingFiles"
+            >
+              {{ uploadingFiles ? "Uploading..." : "Upload file(s)" }}
+            </button>
+            <div v-if="uploadingFiles" class="upload-progress">
+              <div class="upload-progress-text">{{ uploadProgressText }}</div>
+              <div class="upload-progress-bar">
+                <div
+                  class="upload-progress-bar-fill"
+                  :style="{ width: `${uploadProgressPercent}%` }"
+                ></div>
+              </div>
+              <div class="upload-progress-percent">{{ uploadProgressPercent }}%</div>
+            </div>
+          </div>
+
           <div v-if="selectedDataset.files.length > 0" class="file-actions-bar">
             <label class="select-all-row">
               <input
@@ -399,6 +498,7 @@ async function moveSelectedFiles() {
                 :checked="selectedFileIds.length === selectedDataset.files.length"
                 @change="toggleSelectAllFiles"
               />
+      
               <span>Select all</span>
             </label>
 
@@ -722,6 +822,48 @@ h4 {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.75rem;
+}
+
+.upload-section {
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.upload-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 260px;
+}
+
+.upload-progress-text {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.upload-progress-bar {
+  width: 100%;
+  height: 10px;
+  background: #e8ebf3;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.upload-progress-bar-fill {
+  height: 100%;
+  background: #2f6fed;
+  transition: width 0.15s ease;
+}
+
+.upload-progress-percent {
+  font-size: 0.8rem;
+  color: #666;
 }
 
 </style>
