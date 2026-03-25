@@ -15,7 +15,7 @@ from app.core.security import hash_password
 from app.models import User, Dataset, File, FilePreview
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead, DatasetUpdate
-from app.schemas.file import FileCreate, FileRead
+from app.schemas.file import FileCreate, FileRead, BulkMoveFilesRequest, BulkDeleteFilesRequest
 from app.schemas.file_preview import FilePreviewRead
 from app.services.storage import upload_fileobj, get_s3_public_client, delete_object
 from app.services.preview import generate_trace_thumb_from_h5
@@ -427,3 +427,57 @@ def delete_dataset(dataset_id: uuid.UUID,
         raise HTTPException(status_code=500, detail="Error deleting dataset")
 
     return {"detail": "Dataset deleted"}
+
+
+@app.post("/files/bulk-delete")
+def bulk_delete_files(
+    request: BulkDeleteFilesRequest,
+    db: Session = Depends(get_db),
+):
+    files = (
+        db.query(File)
+        .filter(File.id.in_(request.file_ids))
+        .all()
+    )
+
+    if len(files) != len(request.file_ids):
+        raise HTTPException(status_code=404, detail="One or more files not found")
+
+    for file in files:
+        delete_object(file.object_key)
+        db.delete(file)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error deleting files")
+
+    return {"detail": "Files deleted"}
+
+
+@app.post("/files/bulk-move")
+def bulk_move_files(
+    request: BulkMoveFilesRequest,
+    db: Session = Depends(get_db),
+):
+    target_dataset = db.get(Dataset, request.target_dataset_id)
+
+    if target_dataset is None:
+        raise HTTPException(status_code=404, detail="Target dataset not found")
+
+    files = (
+        db.query(File)
+        .filter(File.id.in_(request.file_ids))
+        .all()
+    )
+
+    if len(files) != len(request.file_ids):
+        raise HTTPException(status_code=404, detail="One or more files not found")
+
+    for file in files:
+        file.dataset_id = request.target_dataset_id
+
+    db.commit()
+
+    return {"detail": "Files moved"}

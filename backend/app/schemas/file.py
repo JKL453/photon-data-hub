@@ -17,3 +17,10 @@ class FileRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+class BulkMoveFilesRequest(BaseModel):
+    file_ids: list[uuid.UUID]
+    target_dataset_id: uuid.UUID
+
+class BulkDeleteFilesRequest(BaseModel):
+    file_ids: list[uuid.UUID]

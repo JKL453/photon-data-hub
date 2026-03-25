@@ -17,6 +17,10 @@
   const editDatasetName = ref("")
   const editDatasetDescription = ref("")
   const savingDataset = ref(false)
+  const selectedFileIds = ref([])
+  const deletingSelectedFiles = ref(false)
+  const moveTargetDatasetId = ref("")
+  const movingSelectedFiles = ref(false)
 
   const errorMessage = ref("")
 
@@ -100,6 +104,8 @@
       ...dataset,
       files: filesWithPreviews,
     }
+    selectedFileIds.value = []
+    moveTargetDatasetId.value = ""
   } catch (error) {
     console.error("Fehler beim Laden des Dataset-Details:", error)
     errorMessage.value = "Dataset-Details konnten nicht geladen werden."
@@ -126,7 +132,6 @@
   }
 }
 
-
 async function updateDataset() {
   if (!selectedDataset.value) return
 
@@ -142,11 +147,9 @@ async function updateDataset() {
       }
     )
 
-    // direkt UI aktualisieren
     selectedDataset.value.name = editDatasetName.value
     selectedDataset.value.description = editDatasetDescription.value
 
-    // linke Liste neu laden
     await loadDatasets()
 
   } catch (error) {
@@ -200,6 +203,98 @@ async function deleteDataset(datasetId) {
   } catch (error) {
     console.error("Fehler beim Löschen des Datasets:", error)
     errorMessage.value = "Dataset konnte nicht gelöscht werden."
+  }
+}
+
+function toggleFileSelection(fileId) {
+  if (selectedFileIds.value.includes(fileId)) {
+    selectedFileIds.value = selectedFileIds.value.filter((id) => id !== fileId)
+  } else {
+    selectedFileIds.value = [...selectedFileIds.value, fileId]
+  }
+}
+
+function isFileSelected(fileId) {
+  return selectedFileIds.value.includes(fileId)
+}
+
+function toggleSelectAllFiles() {
+  if (!selectedDataset.value) return
+
+  const allFileIds = selectedDataset.value.files.map((file) => file.id)
+
+  if (selectedFileIds.value.length === allFileIds.length) {
+    selectedFileIds.value = []
+  } else {
+    selectedFileIds.value = allFileIds
+  }
+}
+
+async function deleteSelectedFiles() {
+  if (!selectedDataset.value || selectedFileIds.value.length === 0) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Really delete ${selectedFileIds.value.length} selected file(s)?`
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  deletingSelectedFiles.value = true
+  errorMessage.value = ""
+
+  try {
+    await axios.post("http://localhost:8000/files/bulk-delete", {
+      file_ids: selectedFileIds.value,
+    })
+
+    selectedFileIds.value = []
+
+    await selectDataset(selectedDataset.value.id)
+    await loadDatasets()
+  } catch (error) {
+    console.error("Fehler beim Löschen ausgewählter Dateien:", error)
+    errorMessage.value = "Ausgewählte Dateien konnten nicht gelöscht werden."
+  } finally {
+    deletingSelectedFiles.value = false
+  }
+}
+
+async function moveSelectedFiles() {
+  if (!selectedDataset.value || selectedFileIds.value.length === 0 || !moveTargetDatasetId.value) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Really move ${selectedFileIds.value.length} selected file(s) to another dataset?`
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  movingSelectedFiles.value = true
+  errorMessage.value = ""
+
+  try {
+    await axios.post("http://localhost:8000/files/bulk-move", {
+      file_ids: selectedFileIds.value,
+      target_dataset_id: moveTargetDatasetId.value,
+    })
+
+    selectedFileIds.value = []
+    moveTargetDatasetId.value = ""
+
+    await selectDataset(selectedDataset.value.id)
+    await loadDatasets()
+  } catch (error) {
+    console.error("Fehler beim Verschieben ausgewählter Dateien:", error)
+    errorMessage.value = "Ausgewählte Dateien konnten nicht verschoben werden."
+  } finally {
+    movingSelectedFiles.value = false
   }
 }
 
@@ -297,28 +392,82 @@ async function deleteDataset(datasetId) {
 
           <h4>Files</h4>
 
+          <div v-if="selectedDataset.files.length > 0" class="file-actions-bar">
+            <label class="select-all-row">
+              <input
+                type="checkbox"
+                :checked="selectedFileIds.length === selectedDataset.files.length"
+                @change="toggleSelectAllFiles"
+              />
+              <span>Select all</span>
+            </label>
+
+            <div class="bulk-actions-group">
+              <select
+                v-model="moveTargetDatasetId"
+                class="text-input move-select"
+              >
+                <option value="">Move to dataset...</option>
+                <option
+                  v-for="ds in datasets.filter((ds) => ds.id !== selectedDataset.id)"
+                  :key="ds.id"
+                  :value="ds.id"
+                >
+                  {{ ds.name }}
+                </option>
+              </select>
+
+              <button
+                class="secondary-button small-button"
+                @click="moveSelectedFiles"
+                :disabled="selectedFileIds.length === 0 || !moveTargetDatasetId || movingSelectedFiles"
+              >
+                {{ movingSelectedFiles ? "Moving..." : `Move selected (${selectedFileIds.length})` }}
+              </button>
+            </div>
+
+            <button
+              class="danger-button small-button"
+              @click="deleteSelectedFiles"
+              :disabled="selectedFileIds.length === 0 || deletingSelectedFiles"
+            >
+              {{ deletingSelectedFiles ? "Deleting..." : `Delete selected (${selectedFileIds.length})` }}
+            </button>
+          </div>
+
           <ul class="file-list">
             <li
               v-for="file in selectedDataset.files"
               :key="file.id"
               class="file-item"
             >
-              <div class="file-name">{{ file.filename }}</div>
+              <div class="file-top-row">
+                <label class="file-checkbox-row">
+                  <input
+                    type="checkbox"
+                    :checked="isFileSelected(file.id)"
+                    @change="toggleFileSelection(file.id)"
+                  />
+                  <span class="file-name">{{ file.filename }}</span>
+                </label>
+              </div>
+
               <div class="file-meta">{{ file.object_key }}</div>
+
               <TracePreview
                 v-if="file.preview"
                 :preview="file.preview.preview_data"
               />
 
+              <div class="file-button-row">
+                <button class="download-button small-button" @click="downloadFile(file.id)">
+                  Download
+                </button>
 
-              <button class="download-button small-button" @click="downloadFile(file.id)">
-                Download
-              </button>
-
-              <button class="danger-button small-button" @click="deleteFile(file.id)">
-                Delete
-              </button>
-  
+                <button class="danger-button small-button" @click="deleteFile(file.id)">
+                  Delete
+                </button>
+              </div>
             </li>
           </ul>
 
@@ -481,6 +630,25 @@ h4 {
   cursor: not-allowed;
 }
 
+.secondary-button {
+  padding: 0.7rem 1rem;
+  border: none;
+  border-radius: 10px;
+  background: #6c757d;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.secondary-button:hover {
+  background: #5a6268;
+}
+
+.secondary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .edit-dataset-form {
   display: flex;
   flex-direction: column;
@@ -490,7 +658,6 @@ h4 {
 
 .danger-button {
   margin-top: 0.5rem;
-  margin-left: 0.5rem;
   padding: 0.45rem 0.8rem;
   border: none;
   border-radius: 10px;
@@ -509,4 +676,52 @@ h4 {
   font-size: 0.8rem;
   border-radius: 8px;
 }
+
+.file-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.bulk-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.move-select {
+  min-width: 180px;
+  margin: 0;
+}
+
+.select-all-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.file-top-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.file-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.file-button-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
 </style>
