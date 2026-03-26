@@ -18,6 +18,7 @@
   const editDatasetDescription = ref("")
   const savingDataset = ref(false)
   const selectedFileIds = ref([])
+  const selectedFile = ref(null)
   const deletingSelectedFiles = ref(false)
   const moveTargetDatasetId = ref("")
   const movingSelectedFiles = ref(false)
@@ -109,6 +110,7 @@
     }
     selectedFileIds.value = []
     moveTargetDatasetId.value = ""
+    selectedFile.value = null
   } catch (error) {
     console.error("Fehler beim Laden des Dataset-Details:", error)
     errorMessage.value = "Dataset-Details konnten nicht geladen werden."
@@ -430,6 +432,27 @@ async function handleFileUpload(event) {
 
         <p v-if="loadingDatasetDetail">Dataset-Details werden geladen ...</p>
 
+        <div v-else-if="selectedFile" class="file-detail">
+          <button
+            class="secondary-button small-button"
+            @click="selectedFile = null"
+          >
+            ← Back to dataset
+          </button>
+
+          <h3>{{ selectedFile.filename }}</h3>
+          <p class="file-meta">{{ selectedFile.object_key }}</p>
+
+          <TracePreview
+            v-if="selectedFile.preview"
+            :preview="selectedFile.preview.preview_data"
+            variant="detail"
+            class="detail-trace-preview"
+          />
+
+          <p v-else class="empty-state">Keine Preview für dieses File vorhanden.</p>
+        </div>
+
         <div v-else-if="selectedDataset">
           <div class="edit-dataset-form">
             <input
@@ -539,13 +562,15 @@ async function handleFileUpload(event) {
             <li
               v-for="file in selectedDataset.files"
               :key="file.id"
-              class="file-item"
+              class="file-item clickable-file"
+              @click="selectedFile = file"
             >
               <div class="file-top-row">
                 <label class="file-checkbox-row">
                   <input
                     type="checkbox"
                     :checked="isFileSelected(file.id)"
+                    @click.stop
                     @change="toggleFileSelection(file.id)"
                   />
                   <span class="file-name">{{ file.filename }}</span>
@@ -557,14 +582,15 @@ async function handleFileUpload(event) {
               <TracePreview
                 v-if="file.preview"
                 :preview="file.preview.preview_data"
+                variant="thumb"
               />
 
               <div class="file-button-row">
-                <button class="download-button small-button" @click="downloadFile(file.id)">
+                <button class="download-button small-button" @click.stop="downloadFile(file.id)">
                   Download
                 </button>
 
-                <button class="danger-button small-button" @click="deleteFile(file.id)">
+                <button class="danger-button small-button" @click.stop="deleteFile(file.id)">
                   Delete
                 </button>
               </div>
@@ -671,7 +697,6 @@ h4 {
 }
 
 .download-button {
-  margin-top: 0.75rem;
   padding: 0.45rem 0.8rem;
   border: none;
   border-radius: 10px;
@@ -757,7 +782,6 @@ h4 {
 }
 
 .danger-button {
-  margin-top: 0.5rem;
   padding: 0.45rem 0.8rem;
   border: none;
   border-radius: 10px;
@@ -864,6 +888,25 @@ h4 {
 .upload-progress-percent {
   font-size: 0.8rem;
   color: #666;
+}
+
+.clickable-file {
+  cursor: pointer;
+}
+
+.clickable-file:hover {
+  background: #f1f4ff;
+  border-color: #d9e1ff;
+}
+
+.file-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.detail-trace-preview {
+  width: 100%;
 }
 
 </style>

@@ -25,6 +25,10 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  variant: {
+    type: String,
+    default: "thumb",
+  },
 })
 
 const defaultColors = [
@@ -62,11 +66,19 @@ const chartOptions = computed(() => ({
       position: "top",
     },
   },
+  layout: {
+    padding: {
+      top: 10,
+      bottom: 10,
+      left: 5,
+      right: 5,
+    },
+  },
   scales: {
     x: {
       title: {
         display: true,
-        text: `Time/s`,
+        text: "Time (s)",
       },
       ticks: {
         maxTicksLimit: 6,
@@ -91,13 +103,21 @@ const chartOptions = computed(() => ({
 </script>
 
 <template>
-  <div class="trace-preview-wrapper">
+  <div :class="['trace-preview-wrapper', `trace-preview-wrapper--${variant}`]">
     <Line :data="chartData" :options="chartOptions" />
   </div>
 </template>
 
 <style scoped>
 .trace-preview-wrapper {
+  width: 100%;
+}
+
+.trace-preview-wrapper--thumb {
   height: 180px;
+}
+
+.trace-preview-wrapper--detail {
+  height: 320px;
 }
 </style>
