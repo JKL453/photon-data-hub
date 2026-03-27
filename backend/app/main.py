@@ -379,6 +379,41 @@ def get_file_preview_by_type(
     return preview
 
 
+# not stored in db yet
+@app.get("/files/{file_id}/trace-detail")
+def get_file_trace_detail(
+    file_id: uuid.UUID,
+    bin_width_ms: float = 10.0,
+    max_points: int = 5000,
+    db: Session = Depends(get_db),
+):
+    file = db.query(File).filter(File.id == file_id).first()
+
+    if file is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if bin_width_ms <= 0:
+        raise HTTPException(status_code=400, detail="bin_width_ms must be > 0")
+
+    if max_points <= 0:
+        raise HTTPException(status_code=400, detail="max_points must be > 0")
+
+    try:
+        trace_data = generate_trace_thumb_from_h5(
+            object_key=file.object_key,
+            timing_resolution=5e-9,
+            bin_width_ms=bin_width_ms,
+            max_points=max_points,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    trace_data["preview_kind"] = "trace_detail"
+    trace_data["file_id"] = str(file.id)
+
+    return trace_data
+
+
 @app.delete("/files/{file_id}")
 def delete_file(file_id: uuid.UUID,
                 db: Session = Depends(get_db),

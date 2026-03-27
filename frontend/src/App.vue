@@ -25,6 +25,9 @@
   const uploadingFiles = ref(false)
   const uploadProgressPercent = ref(0)
   const uploadProgressText = ref("")
+  const selectedDetailBinWidthMs = ref(10)
+  const fileDetailTrace = ref(null)
+  const loadingFileDetailTrace = ref(false)
 
   const errorMessage = ref("")
 
@@ -371,6 +374,37 @@ async function handleFileUpload(event) {
   }
 }
 
+
+async function loadFileDetailTrace(fileId) {
+  loadingFileDetailTrace.value = true
+  errorMessage.value = ""
+
+  try {
+    const response = await axios.get(
+      `http://localhost:8000/files/${fileId}/trace-detail`,
+      {
+        params: {
+          bin_width_ms: selectedDetailBinWidthMs.value,
+          max_points: 5000,
+        },
+      }
+    )
+
+    fileDetailTrace.value = response.data
+  } catch (error) {
+    console.error("Fehler beim Laden des Detail-Traces:", error)
+    errorMessage.value = "Detail-Trace konnte nicht geladen werden."
+  } finally {
+    loadingFileDetailTrace.value = false
+  }
+}
+
+
+async function openFileDetail(file) {
+  selectedFile.value = file
+  await loadFileDetailTrace(file.id)
+}
+
 </script>
 
 
@@ -443,11 +477,27 @@ async function handleFileUpload(event) {
           <h3>{{ selectedFile.filename }}</h3>
           <p class="file-meta">{{ selectedFile.object_key }}</p>
 
+          <div class="detail-controls">
+            <label for="bin-width-select">Bin width:</label>
+            <select
+              id="bin-width-select"
+              v-model.number="selectedDetailBinWidthMs"
+              class="text-input"
+              @change="loadFileDetailTrace(selectedFile.id)"
+            >
+              <option :value="1">1 ms</option>
+              <option :value="5">5 ms</option>
+              <option :value="10">10 ms</option>
+              <option :value="50">50 ms</option>
+              <option :value="100">100 ms</option>
+            </select>
+          </div>
+
+
           <TracePreview
-            v-if="selectedFile.preview"
-            :preview="selectedFile.preview.preview_data"
+            v-if="fileDetailTrace"
+            :preview="fileDetailTrace"
             variant="detail"
-            class="detail-trace-preview"
           />
 
           <p v-else class="empty-state">Keine Preview für dieses File vorhanden.</p>
@@ -563,7 +613,7 @@ async function handleFileUpload(event) {
               v-for="file in selectedDataset.files"
               :key="file.id"
               class="file-item clickable-file"
-              @click="selectedFile = file"
+              @click="openFileDetail(file)"
             >
               <div class="file-top-row">
                 <label class="file-checkbox-row">
