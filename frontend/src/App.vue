@@ -28,6 +28,9 @@
   const selectedDetailBinWidthMs = ref(10)
   const fileDetailTrace = ref(null)
   const loadingFileDetailTrace = ref(false)
+  const selectedDetailView = ref("trace")
+  const fileAcfTrace = ref(null)
+  const loadingFileAcfTrace = ref(false)
 
   const errorMessage = ref("")
 
@@ -114,6 +117,9 @@
     selectedFileIds.value = []
     moveTargetDatasetId.value = ""
     selectedFile.value = null
+    fileDetailTrace.value = null
+    fileAcfTrace.value = null
+    selectedDetailView.value = "trace"
   } catch (error) {
     console.error("Fehler beim Laden des Dataset-Details:", error)
     errorMessage.value = "Dataset-Details konnten nicht geladen werden."
@@ -402,7 +408,44 @@ async function loadFileDetailTrace(fileId) {
 
 async function openFileDetail(file) {
   selectedFile.value = file
+  selectedDetailView.value = "trace"
+  fileAcfTrace.value = null
   await loadFileDetailTrace(file.id)
+}
+
+
+async function switchDetailView(view) {
+  if (!selectedFile.value) return
+
+  selectedDetailView.value = view
+
+  if (view === "trace") {
+    await loadFileDetailTrace(selectedFile.value.id)
+  }
+
+  if (view === "acf") {
+    await loadFileAcfTrace(selectedFile.value.id)
+  }
+}
+
+
+async function loadFileAcfTrace(fileId) {
+  loadingFileAcfTrace.value = true
+  errorMessage.value = ""
+
+  try {
+    const response = await axios.get(
+      `http://localhost:8000/files/${fileId}/acf-detail`
+    )
+
+    console.log("ACF response from backend:", response.data)
+    fileAcfTrace.value = response.data
+  } catch (error) {
+    console.error("Fehler beim Laden der ACF/CCF:", error)
+    errorMessage.value = "ACF/CCF konnte nicht geladen werden."
+  } finally {
+    loadingFileAcfTrace.value = false
+  }
 }
 
 </script>
@@ -469,7 +512,7 @@ async function openFileDetail(file) {
         <div v-else-if="selectedFile" class="file-detail">
           <button
             class="secondary-button small-button"
-            @click="selectedFile = null"
+            @click="selectedFile = null; fileDetailTrace = null; fileAcfTrace = null"
           >
             ← Back to dataset
           </button>
@@ -477,7 +520,25 @@ async function openFileDetail(file) {
           <h3>{{ selectedFile.filename }}</h3>
           <p class="file-meta">{{ selectedFile.object_key }}</p>
 
-          <div class="detail-controls">
+          <div class="detail-view-toggle">
+            <button
+              class="secondary-button small-button"
+              :class="{'active-toggle': selectedDetailView === 'trace' }"
+              @click="switchDetailView('trace')"
+            >
+              Trace
+            </button>
+
+            <button
+              class="secondary-button small-button"
+              :class="{'active-toggle': selectedDetailView === 'acf' }"
+              @click="switchDetailView('acf')"
+            >
+              ACF
+            </button>
+          </div>
+
+          <div v-if="selectedDetailView === 'trace'" class="detail-controls">
             <label for="bin-width-select">Bin width:</label>
             <select
               id="bin-width-select"
@@ -495,12 +556,26 @@ async function openFileDetail(file) {
 
 
           <TracePreview
-            v-if="fileDetailTrace"
+            v-if="selectedDetailView === 'trace' && fileDetailTrace"
             :preview="fileDetailTrace"
             variant="detail"
           />
 
-          <p v-else class="empty-state">Keine Preview für dieses File vorhanden.</p>
+          <TracePreview
+            v-else-if="selectedDetailView === 'acf' && fileAcfTrace"
+            :preview="fileAcfTrace"
+            variant="detail"
+          />
+
+          <p v-else-if="selectedDetailView === 'trace' && loadingFileDetailTrace" class="empty-state">
+            Lade Detail-Trace ...
+          </p>
+
+          <p v-else-if="selectedDetailView === 'acf' && loadingFileAcfTrace" class="empty-state">
+            Lade ACF/CCF ...
+          </p>
+
+          <p v-else class="empty-state">Keine Daten für diese Ansicht vorhanden.</p>
         </div>
 
         <div v-else-if="selectedDataset">
@@ -957,6 +1032,16 @@ h4 {
 
 .detail-trace-preview {
   width: 100%;
+}
+
+.detail-view-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.active-toggle {
+  background: #2f6fed;
 }
 
 </style>

@@ -134,3 +134,96 @@ def generate_trace_thumb_from_h5(
             "n_photons": int(len(times_s)),
             "series": series,
         }
+    
+
+def generate_acf_detail_from_h5(
+    *,
+    object_key: str,
+    timing_resolution: float = 5e-9,
+    bins_per_dec: int = 70,
+    lag_min_exp: int = 1,
+    lag_max_exp: int = 10,
+) -> dict:
+    try:
+        import pycorrelate as pyc
+    except ImportError as e:
+        raise ImportError(
+            "pycorrelate is required for ACF/CCF calculation. Install with: pip install pycorrelate"
+        ) from e
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        local_path = Path(tmpdir) / "input.h5"
+
+        download_object_to_path(
+            object_key=object_key,
+            target_path=str(local_path),
+        )
+
+        ds = pt.load(
+            local_path,
+            timing_resolution=timing_resolution,
+        )
+
+        timestamps = np.asarray(ds.photons.timestamps)
+        detectors = np.asarray(ds.photons.detectors)
+
+        if timestamps is None or len(timestamps) == 0:
+            raise ValueError("No photon timestamps found in file.")
+
+        if detectors is None or len(detectors) == 0:
+            raise ValueError("No detector information found in file.")
+
+        t_ch0 = timestamps[detectors == 0]
+        t_ch1 = timestamps[detectors == 1]
+
+        if len(t_ch0) == 0:
+            raise ValueError("Channel 0 contains no photons.")
+
+        if len(t_ch1) == 0:
+            raise ValueError("Channel 1 contains no photons.")
+
+     
+        print("dtype:", t_ch0.dtype)
+        print("first 10:", t_ch0[:10])
+        print("min/max:", t_ch0.min(), t_ch0.max())
+
+        if len(t_ch0) == 0:
+            raise ValueError("Channel 0 contains no photons.")
+
+        bins = pyc.make_loglags(lag_min_exp, lag_max_exp, bins_per_dec)
+
+        if bins.size < 2:
+            raise ValueError("Could not generate lag bins for correlation.")
+
+        g = pyc.pcorrelate(t_ch0, t_ch0, bins, normalize=True)
+        tau_s = 0.5 * (bins[1:] + bins[:-1]) * timing_resolution
+
+        print("ACF DEBUG")
+        print("n_points:", len(tau_s))
+        print("tau first 10:", tau_s[:10])
+        print("tau last 10:", tau_s[-10:])
+        print("g first 10:", g[:10])
+        print("g last 10:", g[-10:])
+
+        return {
+            "preview_kind": "acf_detail",
+            "correlation_kind": "acf",
+            "x": tau_s.tolist(),
+            "x_unit": "s",
+            "y_unit": "G(tau)",
+            "x_scale": "log",
+            "series": [
+                {
+                    "label": "channel 0 ACF",
+                    "channel": 0,
+                    "y": g.tolist(),
+                }
+            ],
+            "meta": {
+                "bins_per_dec": bins_per_dec,
+                "lag_min_exp": lag_min_exp,
+                "lag_max_exp": lag_max_exp,
+                "n_points": int(len(tau_s)),
+                "n_series": 1,
+            },
+        }

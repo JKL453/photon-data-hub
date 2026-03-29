@@ -18,7 +18,7 @@ from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead, Dat
 from app.schemas.file import FileCreate, FileRead, BulkMoveFilesRequest, BulkDeleteFilesRequest
 from app.schemas.file_preview import FilePreviewRead
 from app.services.storage import upload_fileobj, get_s3_public_client, delete_object
-from app.services.preview import generate_trace_thumb_from_h5
+from app.services.preview import generate_trace_thumb_from_h5, generate_trace_thumb_from_h5, generate_acf_detail_from_h5
 from app.core.config import settings
 
 app = FastAPI(title="PhotonDataHub API")
@@ -516,3 +516,40 @@ def bulk_move_files(
     db.commit()
 
     return {"detail": "Files moved"}
+
+
+@app.get("/files/{file_id}/acf-detail")
+def get_file_acf_detail(
+    file_id: uuid.UUID,
+    bins_per_dec: int = 100,
+    lag_min_exp: int = 0,
+    lag_max_exp: int = 7,
+    db: Session = Depends(get_db),
+):
+    file = db.query(File).filter(File.id == file_id).first()
+
+    if file is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if bins_per_dec <= 0:
+        raise HTTPException(status_code=400, detail="bins_per_dec must be > 0")
+
+    if lag_max_exp <= lag_min_exp:
+        raise HTTPException(status_code=400, detail="lag_max_exp must be > lag_min_exp")
+
+    try:
+        acf_data = generate_acf_detail_from_h5(
+            object_key=file.object_key,
+            timing_resolution=5e-9,
+            bins_per_dec=bins_per_dec,
+            lag_min_exp=lag_min_exp,
+            lag_max_exp=lag_max_exp,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    acf_data["file_id"] = str(file.id)
+
+    return acf_data
