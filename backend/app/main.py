@@ -521,7 +521,7 @@ def bulk_move_files(
 @app.get("/files/{file_id}/acf-detail")
 def get_file_acf_detail(
     file_id: uuid.UUID,
-    bins_per_dec: int = 100,
+    bins_per_dec: int = 30,
     lag_min_exp: int = 0,
     lag_max_exp: int = 7,
     db: Session = Depends(get_db),

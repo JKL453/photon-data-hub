@@ -136,8 +136,7 @@ function renderPlotlyDetail() {
   }))
 
   const isLogX =
-  props.preview?.preview_kind === "acf_detail" ||
-  props.preview?.x_scale === "log"
+  props.preview?.preview_kind === "acf_detail"
 
   const layout = {
     autosize: true,
@@ -146,13 +145,13 @@ function renderPlotlyDetail() {
     plot_bgcolor: "white",
     xaxis: {
       title: `Time (${props.preview?.x_unit ?? "s"})`,
-      type: isLogX ? "log" : "linear",
+      type: props.preview?.preview_kind === "acf_detail" ? "log" : "linear",
       zeroline: false,
     },
     yaxis: {
       title: props.preview?.y_unit ?? "Counts / bin",
-      rangemode: "tozero",
       zeroline: false,
+      range: [1, null],
     },
     legend: {
       orientation: "h",

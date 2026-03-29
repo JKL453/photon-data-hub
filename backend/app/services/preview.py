@@ -140,9 +140,9 @@ def generate_acf_detail_from_h5(
     *,
     object_key: str,
     timing_resolution: float = 5e-9,
-    bins_per_dec: int = 70,
+    bins_per_dec: int = 100,
     lag_min_exp: int = 1,
-    lag_max_exp: int = 10,
+    lag_max_exp: int = 8,
 ) -> dict:
     try:
         import pycorrelate as pyc
@@ -164,14 +164,17 @@ def generate_acf_detail_from_h5(
             timing_resolution=timing_resolution,
         )
 
-        timestamps = np.asarray(ds.photons.timestamps)
-        detectors = np.asarray(ds.photons.detectors)
+        timestamps = ds.photons.timestamps
+        detectors = ds.photons.detectors
 
         if timestamps is None or len(timestamps) == 0:
             raise ValueError("No photon timestamps found in file.")
 
         if detectors is None or len(detectors) == 0:
             raise ValueError("No detector information found in file.")
+
+        timestamps = np.asarray(timestamps)
+        detectors = np.asarray(detectors)
 
         t_ch0 = timestamps[detectors == 0]
         t_ch1 = timestamps[detectors == 1]
@@ -182,33 +185,39 @@ def generate_acf_detail_from_h5(
         if len(t_ch1) == 0:
             raise ValueError("Channel 1 contains no photons.")
 
-     
-        print("dtype:", t_ch0.dtype)
-        print("first 10:", t_ch0[:10])
-        print("min/max:", t_ch0.min(), t_ch0.max())
-
-        if len(t_ch0) == 0:
-            raise ValueError("Channel 0 contains no photons.")
-
         bins = pyc.make_loglags(lag_min_exp, lag_max_exp, bins_per_dec)
 
         if bins.size < 2:
             raise ValueError("Could not generate lag bins for correlation.")
 
-        g = pyc.pcorrelate(t_ch0, t_ch0, bins, normalize=True)
         tau_s = 0.5 * (bins[1:] + bins[:-1]) * timing_resolution
 
-        print("ACF DEBUG")
-        print("n_points:", len(tau_s))
-        print("tau first 10:", tau_s[:10])
-        print("tau last 10:", tau_s[-10:])
-        print("g first 10:", g[:10])
-        print("g last 10:", g[-10:])
+        g_acf0 = pyc.pcorrelate(t_ch0, t_ch0, bins, normalize=True)
+        g_acf1 = pyc.pcorrelate(t_ch1, t_ch1, bins, normalize=True)
+        g_ccf = pyc.pcorrelate(t_ch0, t_ch1, bins, normalize=True)
+
+        cut = 50
+
+        tau_cut = tau_s[cut:]
+        g_acf0_cut = g_acf0[cut:]
+        g_acf1_cut = g_acf1[cut:]
+        g_ccf_cut = g_ccf[cut:]
+
+        mask = tau_cut > 5e-6
+
+        tau_masked = tau_cut[mask]
+        g_acf0_masked = g_acf0_cut[mask]
+        g_acf1_masked = g_acf1_cut[mask]
+        g_ccf_masked = g_ccf_cut[mask]
+
+        g_acf0_masked = np.where(g_acf0_masked == 0, 1e-9, g_acf0_masked)
+        g_acf1_masked = np.where(g_acf1_masked == 0, 1e-9, g_acf1_masked)
+        g_ccf_masked = np.where(g_ccf_masked == 0, 1e-9, g_ccf_masked)
 
         return {
             "preview_kind": "acf_detail",
-            "correlation_kind": "acf",
-            "x": tau_s.tolist(),
+            "correlation_kind": "acf_ccf",
+            "x": tau_masked.tolist(),
             "x_unit": "s",
             "y_unit": "G(tau)",
             "x_scale": "log",
@@ -216,14 +225,26 @@ def generate_acf_detail_from_h5(
                 {
                     "label": "channel 0 ACF",
                     "channel": 0,
-                    "y": g.tolist(),
-                }
+                    "y": g_acf0_masked.tolist(),
+                },
+                {
+                    "label": "channel 1 ACF",
+                    "channel": 1,
+                    "y": g_acf1_masked.tolist(),
+                },
+                {
+                    "label": "channel 0 vs channel 1 CCF",
+                    "channel": None,
+                    "y": g_ccf_masked.tolist(),
+                },
             ],
             "meta": {
                 "bins_per_dec": bins_per_dec,
                 "lag_min_exp": lag_min_exp,
                 "lag_max_exp": lag_max_exp,
-                "n_points": int(len(tau_s)),
-                "n_series": 1,
+                "n_points": int(len(tau_masked)),
+                "n_series": 3,
+                "cut_points": cut,
+                "tau_min_s": 5e-6,
             },
         }
