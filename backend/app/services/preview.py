@@ -143,6 +143,9 @@ def generate_acf_detail_from_h5(
     bins_per_dec: int = 100,
     lag_min_exp: int = 1,
     lag_max_exp: int = 8,
+    cut_points: int = 0,
+    tau_min_s: float | None = 5e-7,
+    tau_max_s: float | None = None,
 ) -> dict:
     try:
         import pycorrelate as pyc
@@ -196,14 +199,16 @@ def generate_acf_detail_from_h5(
         g_acf1 = pyc.pcorrelate(t_ch1, t_ch1, bins, normalize=True)
         g_ccf = pyc.pcorrelate(t_ch0, t_ch1, bins, normalize=True)
 
-        cut = 50
+        tau_cut = tau_s[cut_points:]
+        g_acf0_cut = g_acf0[cut_points:]
+        g_acf1_cut = g_acf1[cut_points:]
+        g_ccf_cut = g_ccf[cut_points:]
 
-        tau_cut = tau_s[cut:]
-        g_acf0_cut = g_acf0[cut:]
-        g_acf1_cut = g_acf1[cut:]
-        g_ccf_cut = g_ccf[cut:]
-
-        mask = tau_cut > 5e-6
+        mask = np.ones_like(tau_cut, dtype=bool)
+        if tau_min_s is not None:
+            mask &= tau_cut > tau_min_s
+        if tau_max_s is not None:
+            mask &= tau_cut <= tau_max_s
 
         tau_masked = tau_cut[mask]
         g_acf0_masked = g_acf0_cut[mask]
@@ -244,7 +249,8 @@ def generate_acf_detail_from_h5(
                 "lag_max_exp": lag_max_exp,
                 "n_points": int(len(tau_masked)),
                 "n_series": 3,
-                "cut_points": cut,
-                "tau_min_s": 5e-6,
+                "cut_points": cut_points,
+                "tau_min_s": tau_min_s,
+                "tau_max_s": tau_max_s,
             },
         }

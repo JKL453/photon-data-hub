@@ -524,6 +524,9 @@ def get_file_acf_detail(
     bins_per_dec: int = 30,
     lag_min_exp: int = 0,
     lag_max_exp: int = 7,
+    cut_points: int = 50,
+    tau_min_s: float | None = 5e-6,
+    tau_max_s: float | None = None,
     db: Session = Depends(get_db),
 ):
     file = db.query(File).filter(File.id == file_id).first()
@@ -537,6 +540,18 @@ def get_file_acf_detail(
     if lag_max_exp <= lag_min_exp:
         raise HTTPException(status_code=400, detail="lag_max_exp must be > lag_min_exp")
 
+    if cut_points < 0:
+        raise HTTPException(status_code=400, detail="cut_points must be >= 0")
+
+    if tau_min_s is not None and tau_min_s < 0:
+        raise HTTPException(status_code=400, detail="tau_min_s must be >= 0")
+
+    if tau_max_s is not None and tau_max_s < 0:
+        raise HTTPException(status_code=400, detail="tau_max_s must be >= 0")
+
+    if tau_min_s is not None and tau_max_s is not None and tau_max_s <= tau_min_s:
+        raise HTTPException(status_code=400, detail="tau_max_s must be > tau_min_s")
+
     try:
         acf_data = generate_acf_detail_from_h5(
             object_key=file.object_key,
@@ -544,6 +559,9 @@ def get_file_acf_detail(
             bins_per_dec=bins_per_dec,
             lag_min_exp=lag_min_exp,
             lag_max_exp=lag_max_exp,
+            cut_points=cut_points,
+            tau_min_s=tau_min_s,
+            tau_max_s=tau_max_s,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

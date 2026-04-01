@@ -31,6 +31,12 @@
   const selectedDetailView = ref("trace")
   const fileAcfTrace = ref(null)
   const loadingFileAcfTrace = ref(false)
+  const acfBinsPerDec = ref(30)
+  const acfLagMinExp = ref(0)
+  const acfLagMaxExp = ref(7)
+  const acfCutPoints = ref(50)
+  const acfTauMinUs = ref(5)
+  const acfTauMaxUs = ref(0)
 
   const errorMessage = ref("")
 
@@ -435,7 +441,17 @@ async function loadFileAcfTrace(fileId) {
 
   try {
     const response = await axios.get(
-      `http://localhost:8000/files/${fileId}/acf-detail`
+      `http://localhost:8000/files/${fileId}/acf-detail`,
+      {
+        params: {
+          bins_per_dec: acfBinsPerDec.value,
+          lag_min_exp: acfLagMinExp.value,
+          lag_max_exp: acfLagMaxExp.value,
+          cut_points: acfCutPoints.value,
+          tau_min_s: acfTauMinUs.value > 0 ? acfTauMinUs.value * 1e-6 : null,
+          tau_max_s: acfTauMaxUs.value > 0 ? acfTauMaxUs.value * 1e-6 : null,
+        },
+      }
     )
 
     console.log("ACF response from backend:", response.data)
@@ -552,6 +568,46 @@ async function loadFileAcfTrace(fileId) {
               <option :value="50">50 ms</option>
               <option :value="100">100 ms</option>
             </select>
+          </div>
+
+          <div v-if="selectedDetailView === 'acf'" class="detail-controls detail-controls-grid">
+            <label>
+              Bins/dec
+              <input v-model.number="acfBinsPerDec" type="number" min="1" class="text-input" />
+            </label>
+
+            <label>
+              Lag min exp
+              <input v-model.number="acfLagMinExp" type="number" class="text-input" />
+            </label>
+
+            <label>
+              Lag max exp
+              <input v-model.number="acfLagMaxExp" type="number" class="text-input" />
+            </label>
+
+            <label>
+              Cut points
+              <input v-model.number="acfCutPoints" type="number" min="0" class="text-input" />
+            </label>
+
+            <label>
+              τ min (µs)
+              <input v-model.number="acfTauMinUs" type="number" min="0" step="0.1" class="text-input" />
+            </label>
+
+            <label>
+              τ max (µs, 0 = none)
+              <input v-model.number="acfTauMaxUs" type="number" min="0" step="0.1" class="text-input" />
+            </label>
+
+            <button
+              class="secondary-button small-button"
+              @click="loadFileAcfTrace(selectedFile.id)"
+              :disabled="loadingFileAcfTrace"
+            >
+              {{ loadingFileAcfTrace ? "Loading..." : "Update ACF" }}
+            </button>
           </div>
 
 
@@ -1042,6 +1098,20 @@ h4 {
 
 .active-toggle {
   background: #2f6fed;
+}
+
+.detail-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.detail-controls-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
 }
 
 </style>
