@@ -88,6 +88,31 @@
     }
   }
 
+  async function loadTraceThumbPreview(fileId) {
+    try {
+      const previewResponse = await axios.get(
+        `http://localhost:8000/files/${fileId}/previews/trace_thumb`
+      )
+
+      return previewResponse.data
+    } catch (error) {
+      try {
+        await axios.post(
+          `http://localhost:8000/files/${fileId}/previews/generate-trace-thumb`
+        )
+
+        const previewResponse = await axios.get(
+          `http://localhost:8000/files/${fileId}/previews/trace_thumb`
+        )
+
+        return previewResponse.data
+      } catch (retryError) {
+        console.error(`Preview could not be loaded or generated for file ${fileId}:`, retryError)
+        return null
+      }
+    }
+  }
+
   async function selectDataset(datasetId) {
   loadingDatasetDetail.value = true
   errorMessage.value = ""
@@ -98,20 +123,11 @@
 
     const filesWithPreviews = await Promise.all(
       dataset.files.map(async (file) => {
-        try {
-          const previewResponse = await axios.get(
-            `http://localhost:8000/files/${file.id}/previews/trace_thumb`
-          )
+        const preview = await loadTraceThumbPreview(file.id)
 
-          return {
-            ...file,
-            preview: previewResponse.data,
-          }
-        } catch (error) {
-          return {
-            ...file,
-            preview: null,
-          }
+        return {
+          ...file,
+          preview,
         }
       })
     )
@@ -315,6 +331,32 @@ async function moveSelectedFiles() {
     errorMessage.value = "Ausgewählte Dateien konnten nicht verschoben werden."
   } finally {
     movingSelectedFiles.value = false
+  }
+}
+
+
+async function copySelectedFiles() {
+  if (!selectedDataset.value || selectedFileIds.value.length === 0 || !moveTargetDatasetId.value) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Copy ${selectedFileIds.value.length} file(s) to another dataset?`
+  )
+
+  if (!confirmed) return
+
+  try {
+    await axios.post("http://localhost:8000/files/bulk-copy", {
+      file_ids: selectedFileIds.value,
+      target_dataset_id: moveTargetDatasetId.value,
+    })
+
+    await selectDataset(selectedDataset.value.id)
+    await loadDatasets()
+  } catch (error) {
+    console.error("Copy failed:", error)
+    errorMessage.value = "Files could not be copied."
   }
 }
 
@@ -702,41 +744,54 @@ async function loadFileAcfTrace(fileId) {
                 :checked="selectedFileIds.length === selectedDataset.files.length"
                 @change="toggleSelectAllFiles"
               />
-      
               <span>Select all</span>
             </label>
 
-            <div class="bulk-actions-group">
-              <select
-                v-model="moveTargetDatasetId"
-                class="text-input move-select"
-              >
-                <option value="">Move to dataset...</option>
-                <option
-                  v-for="ds in datasets.filter((ds) => ds.id !== selectedDataset.id)"
-                  :key="ds.id"
-                  :value="ds.id"
+            <div class="bulk-actions-panel">
+              <div class="bulk-actions-group">
+                <select
+                  v-model="moveTargetDatasetId"
+                  class="text-input move-select"
                 >
-                  {{ ds.name }}
-                </option>
-              </select>
+                  <option value="">Move to dataset...</option>
+                  <option
+                    v-for="ds in datasets.filter((ds) => ds.id !== selectedDataset.id)"
+                    :key="ds.id"
+                    :value="ds.id"
+                  >
+                    {{ ds.name }}
+                  </option>
+                </select>
 
-              <button
-                class="secondary-button small-button"
-                @click="moveSelectedFiles"
-                :disabled="selectedFileIds.length === 0 || !moveTargetDatasetId || movingSelectedFiles"
-              >
-                {{ movingSelectedFiles ? "Moving..." : `Move selected (${selectedFileIds.length})` }}
-              </button>
+                <button
+                  class="secondary-button small-button"
+                  @click="moveSelectedFiles"
+                  :disabled="selectedFileIds.length === 0 || !moveTargetDatasetId || movingSelectedFiles"
+                >
+                  {{ movingSelectedFiles ? "Moving..." : "Move selected" }}
+                </button>
+
+                <button
+                  class="secondary-button small-button"
+                  @click="copySelectedFiles"
+                  :disabled="selectedFileIds.length === 0 || !moveTargetDatasetId"
+                >
+                  Copy selected
+                </button>
+
+                <button
+                  class="danger-button small-button"
+                  @click="deleteSelectedFiles"
+                  :disabled="selectedFileIds.length === 0 || deletingSelectedFiles"
+                >
+                  {{ deletingSelectedFiles ? "Deleting..." : "Delete selected" }}
+                </button>
+              </div>
+
+              <div class="selected-files-info">
+                {{ selectedFileIds.length }} file(s) selected
+              </div>
             </div>
-
-            <button
-              class="danger-button small-button"
-              @click="deleteSelectedFiles"
-              :disabled="selectedFileIds.length === 0 || deletingSelectedFiles"
-            >
-              {{ deletingSelectedFiles ? "Deleting..." : `Delete selected (${selectedFileIds.length})` }}
-            </button>
           </div>
 
           <ul class="file-list">
@@ -991,11 +1046,24 @@ h4 {
   flex-wrap: wrap;
 }
 
-.bulk-actions-group {
+  .bulk-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+.bulk-actions-panel {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.selected-files-info {
+  font-size: 0.9rem;
+  color: #666;
+  white-space: nowrap;
+  align-self: flex-start;
 }
 
 .move-select {

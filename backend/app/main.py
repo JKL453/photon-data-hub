@@ -425,10 +425,14 @@ def delete_file(file_id: uuid.UUID,
     
     object_key = file.object_key
     
-    delete_object(object_key)
-    
     db.delete(file)
+    db.flush() # ensure the file record is deleted before deleting the object
 
+    # check if other files are using the same object_key before deleting the object from storage
+    remaining = db.query(File).filter(File.object_key == object_key).count()
+
+    if remaining == 0:
+        delete_object(object_key)
     try:
         db.commit()
     except IntegrityError:
@@ -450,8 +454,14 @@ def delete_dataset(dataset_id: uuid.UUID,
     files = db.query(File).filter(File.dataset_id == dataset_id).all()
 
     for file in files:
-        delete_object(file.object_key)
         db.delete(file)
+        db.flush() # ensure the file record is deleted before deleting the object
+
+        # check if other files are using the same object_key before deleting the object from storage
+        remaining = db.query(File).filter(File.object_key == file.object_key).count()
+
+        if remaining == 0:
+            delete_object(file.object_key)
 
     db.delete(dataset)
 
@@ -479,8 +489,14 @@ def bulk_delete_files(
         raise HTTPException(status_code=404, detail="One or more files not found")
 
     for file in files:
-        delete_object(file.object_key)
         db.delete(file)
+        db.flush() # ensure the file record is deleted before deleting the object
+
+        # check if other files are using the same object_key before deleting the object from storage
+        remaining = db.query(File).filter(File.object_key == file.object_key).count()
+
+        if remaining == 0:
+            delete_object(file.object_key)
 
     try:
         db.commit()
@@ -516,6 +532,46 @@ def bulk_move_files(
     db.commit()
 
     return {"detail": "Files moved"}
+
+
+@app.post("/files/bulk-copy")
+def bulk_copy_files(request: BulkMoveFilesRequest, db: Session = Depends(get_db)):
+    if not request.file_ids:
+        raise HTTPException(status_code=400, detail="file_ids required")
+
+    if not request.target_dataset_id:
+        raise HTTPException(status_code=400, detail="target_dataset_id required")
+
+    files = db.query(File).filter(File.id.in_(request.file_ids)).all()
+
+    if not files:
+        raise HTTPException(status_code=404, detail="No files found")
+
+    new_files = []
+
+    for file in files:
+        new_file = File(
+            id=uuid.uuid4(),
+            filename=file.filename,
+            object_key=file.object_key,
+            dataset_id=request.target_dataset_id,
+            created_at=datetime.utcnow(),
+        )
+
+        db.add(new_file)
+        new_files.append(new_file)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error copying files")
+    
+
+    return {
+        "copied_files": [str(f.id) for f in new_files],
+        "count": len(new_files),
+    }
 
 
 @app.get("/files/{file_id}/acf-detail")
