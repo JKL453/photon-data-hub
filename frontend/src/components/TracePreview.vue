@@ -75,7 +75,15 @@ const chartOptions = computed(() => ({
   plugins: {
     legend: {
       display: true,
-      position: "top",
+      position: "bottom",
+      labels: {
+        boxWidth: 10,
+        boxHeight: 10,
+        padding: 8,
+        font: {
+          size: 10,
+        },
+      },
     },
   },
   layout: {
@@ -135,12 +143,9 @@ function renderPlotlyDetail() {
     },
   }))
 
-  const isLogX =
-  props.preview?.preview_kind === "acf_detail"
-
   const layout = {
     autosize: true,
-    margin: { l: 55, r: 20, t: 35, b: 55 },
+    margin: { l: 55, r: 20, t: 20, b: 80 },
     paper_bgcolor: "white",
     plot_bgcolor: "white",
     xaxis: {
@@ -155,8 +160,13 @@ function renderPlotlyDetail() {
     },
     legend: {
       orientation: "h",
-      y: 1.12,
+      y: -0.22,
       x: 0,
+      xanchor: "left",
+      yanchor: "top",
+      font: {
+        size: 10,
+      },
     },
   }
 

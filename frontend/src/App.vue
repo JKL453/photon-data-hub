@@ -113,6 +113,32 @@
     }
   }
 
+
+  async function loadAcfThumbPreview(fileId) {
+  try {
+    const previewResponse = await axios.get(
+      `http://localhost:8000/files/${fileId}/previews/acf_thumb`
+    )
+
+    return previewResponse.data
+  } catch (error) {
+    try {
+      await axios.post(
+        `http://localhost:8000/files/${fileId}/previews/generate-acf-thumb`
+      )
+
+      const previewResponse = await axios.get(
+        `http://localhost:8000/files/${fileId}/previews/acf_thumb`
+      )
+
+      return previewResponse.data
+    } catch (retryError) {
+      console.error(`ACF preview could not be loaded or generated for file ${fileId}:`, retryError)
+      return null
+    }
+  }
+}
+
   async function selectDataset(datasetId) {
   loadingDatasetDetail.value = true
   errorMessage.value = ""
@@ -123,11 +149,13 @@
 
     const filesWithPreviews = await Promise.all(
       dataset.files.map(async (file) => {
-        const preview = await loadTraceThumbPreview(file.id)
+        const tracePreview = await loadTraceThumbPreview(file.id)
+        const acfPreview = await loadAcfThumbPreview(file.id)
 
         return {
           ...file,
-          preview,
+          tracePreview,
+          acfPreview,
         }
       })
     )
@@ -815,11 +843,25 @@ async function loadFileAcfTrace(fileId) {
 
               <div class="file-meta">{{ file.object_key }}</div>
 
-              <TracePreview
-                v-if="file.preview"
-                :preview="file.preview.preview_data"
-                variant="thumb"
-              />
+              <div class="preview-stack">
+                <div class="preview-block">
+                  <div class="preview-label">Trace</div>
+                  <TracePreview
+                    v-if="file.tracePreview"
+                    :preview="file.tracePreview.preview_data"
+                    variant="thumb"
+                  />
+                </div>
+
+                <div class="preview-block preview-block--acf">
+                  <div class="preview-label">ACF</div>
+                  <TracePreview
+                    v-if="file.acfPreview"
+                    :preview="file.acfPreview.preview_data"
+                    variant="thumb"
+                  />
+                </div>
+              </div>
 
               <div class="file-button-row">
                 <button class="download-button small-button" @click.stop="downloadFile(file.id)">
@@ -1180,6 +1222,29 @@ h4 {
   flex-direction: column;
   gap: 0.35rem;
   font-size: 0.9rem;
+}
+
+.preview-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 0.6rem;
+  align-items: start;
+}
+
+.preview-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.preview-block--acf {
+  max-width: 220px;
+}
+
+.preview-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #666;
 }
 
 </style>

@@ -18,7 +18,12 @@ from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead, Dat
 from app.schemas.file import FileCreate, FileRead, BulkMoveFilesRequest, BulkDeleteFilesRequest
 from app.schemas.file_preview import FilePreviewRead
 from app.services.storage import upload_fileobj, get_s3_public_client, delete_object
-from app.services.preview import generate_trace_thumb_from_h5, generate_trace_thumb_from_h5, generate_acf_detail_from_h5
+from app.services.preview import (
+    generate_trace_thumb_from_h5, 
+    generate_trace_thumb_from_h5, 
+    generate_acf_detail_from_h5,
+    generate_acf_thumb_from_h5,
+)
 from app.core.config import settings
 
 app = FastAPI(title="PhotonDataHub API")
@@ -627,3 +632,52 @@ def get_file_acf_detail(
     acf_data["file_id"] = str(file.id)
 
     return acf_data
+
+
+@app.post("/files/{file_id}/previews/generate-acf-thumb", response_model=FilePreviewRead)
+def generate_acf_thumb_preview(
+    file_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    file = db.query(File).filter(File.id == file_id).first()
+
+    if file is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        preview_data = generate_acf_thumb_from_h5(
+            object_key=file.object_key,
+            timing_resolution=5e-9,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    preview = (
+        db.query(FilePreview)
+        .filter(
+            FilePreview.file_id == file.id,
+            FilePreview.preview_type == "acf_thumb",
+        )
+        .first()
+    )
+
+    if preview is None:
+        preview = FilePreview(
+            file_id=file.id,
+            preview_type="acf_thumb",
+            preview_data=preview_data,
+        )
+        db.add(preview)
+    else:
+        preview.preview_data = preview_data
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error generating preview")
+    db.refresh(preview)
+
+    return preview
