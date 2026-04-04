@@ -27,6 +27,11 @@ class Dataset(Base):
         Text,
     )
 
+    notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc),
     )

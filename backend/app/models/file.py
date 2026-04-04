@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,6 +27,17 @@ class File(Base):
         UUID(as_uuid=True),
         ForeignKey("datasets.id"),
         nullable=False,
+    )
+
+    notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    file_tags = relationship(
+        "FileTag",
+        back_populates="file",
+        cascade="all, delete",
     )
 
     dataset = relationship("Dataset", back_populates="files")
