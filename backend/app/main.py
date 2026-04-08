@@ -13,10 +13,13 @@ from app.db.session import get_db
 from app.core.config import settings
 from app.core.security import hash_password
 from app.models import User, Dataset, File, FilePreview
+from app.models.file_tag import FileTag
+from app.models.tags import Tag
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead, DatasetUpdate
 from app.schemas.file import FileCreate, FileRead, BulkMoveFilesRequest, BulkDeleteFilesRequest
 from app.schemas.file_preview import FilePreviewRead
+from app.schemas.tag import TagCreate, TagRead
 from app.services.storage import upload_fileobj, get_s3_public_client, delete_object
 from app.services.preview import (
     generate_trace_thumb_from_h5, 
@@ -681,3 +684,103 @@ def generate_acf_thumb_preview(
     db.refresh(preview)
 
     return preview
+
+
+@app.post("/tags", response_model=TagRead)
+def create_tag(tag_in: TagCreate, db: Session = Depends(get_db)):
+    existing = db.query(Tag).filter(Tag.name == tag_in.name).first()
+
+    if existing:
+        return existing
+    
+    tag = Tag(name=tag_in.name)
+    db.add(tag)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Tag name already exists")
+    db.refresh(tag)
+
+    return tag
+
+
+@app.get("/tags", response_model=list[TagRead])
+def list_tags(db: Session = Depends(get_db)):
+    return db.query(Tag).order_by(Tag.name).all()
+
+
+@app.post("/files/{file_id}/tags/{tag_id}")
+def add_tag_to_file(
+    file_id: uuid.UUID,
+    tag_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    file = db.query(File).filter(File.id == file_id).first()
+    tag = db.query(Tag).filter(Tag.id == tag_id).first()
+
+    if not file or not tag:
+        raise HTTPException(status_code=404, detail="File or Tag not found")
+
+    existing = (
+        db.query(FileTag)
+        .filter(FileTag.file_id == file_id, FileTag.tag_id == tag_id)
+        .first()
+    )
+
+    if existing:
+        return {"message": "Tag already assigned"}
+
+    file_tag = FileTag(file_id=file_id, tag_id=tag_id)
+    db.add(file_tag)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error adding tag to file")
+
+    return {"message": "Tag added"}
+
+
+@app.delete("/files/{file_id}/tags/{tag_id}")
+def remove_tag_from_file(
+    file_id: uuid.UUID,
+    tag_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    file_tag = (
+        db.query(FileTag)
+        .filter(FileTag.file_id == file_id, FileTag.tag_id == tag_id)
+        .first()
+    )
+
+    if not file_tag:
+        raise HTTPException(status_code=404, detail="Tag not assigned")
+
+    db.delete(file_tag)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error removing tag from file")
+
+    return {"message": "Tag removed"}
+
+
+@app.get("/files/{file_id}/tags", response_model=list[TagRead])
+def get_file_tags(file_id: uuid.UUID, db: Session = Depends(get_db)):
+    file = db.query(File).filter(File.id == file_id).first()
+
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_tags = (
+        db.query(Tag)
+        .join(FileTag, Tag.id == FileTag.tag_id)
+        .filter(FileTag.file_id == file_id)
+        .all()
+    )
+
+    return file_tags

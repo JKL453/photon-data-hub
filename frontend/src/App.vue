@@ -37,6 +37,52 @@
   const acfCutPoints = ref(50)
   const acfTauMinUs = ref(5)
   const acfTauMaxUs = ref(0)
+  const newTagName = ref("")
+async function loadFileTags(fileId) {
+  try {
+    const response = await axios.get(`http://localhost:8000/files/${fileId}/tags`)
+    return response.data
+  } catch (error) {
+    console.error(`Tags could not be loaded for file ${fileId}:`, error)
+    return []
+  }
+}
+
+async function addTagToFile(file) {
+  const tagName = newTagName.value.trim()
+  if (!tagName) return
+
+  try {
+    const tagResponse = await axios.post("http://localhost:8000/tags", {
+      name: tagName,
+    })
+
+    await axios.post(
+      `http://localhost:8000/files/${file.id}/tags/${tagResponse.data.id}`
+    )
+
+    const alreadyAssigned = (file.tags || []).some((tag) => tag.id === tagResponse.data.id)
+    if (!alreadyAssigned) {
+      file.tags = [...(file.tags || []), tagResponse.data]
+    }
+
+    newTagName.value = ""
+  } catch (error) {
+    console.error("Tag could not be added:", error)
+    errorMessage.value = "Tag konnte nicht hinzugefügt werden."
+  }
+}
+
+async function removeTagFromFile(file, tag) {
+  try {
+    await axios.delete(`http://localhost:8000/files/${file.id}/tags/${tag.id}`)
+    file.tags = (file.tags || []).filter((t) => t.id !== tag.id)
+  } catch (error) {
+    console.error("Tag could not be removed:", error)
+    errorMessage.value = "Tag konnte nicht entfernt werden."
+  }
+}
+
 
   const errorMessage = ref("")
 
@@ -151,11 +197,13 @@
       dataset.files.map(async (file) => {
         const tracePreview = await loadTraceThumbPreview(file.id)
         const acfPreview = await loadAcfThumbPreview(file.id)
+        const tags = await loadFileTags(file.id)
 
         return {
           ...file,
           tracePreview,
           acfPreview,
+          tags,
         }
       })
     )
@@ -606,6 +654,34 @@ async function loadFileAcfTrace(fileId) {
           <h3>{{ selectedFile.filename }}</h3>
           <p class="file-meta">{{ selectedFile.object_key }}</p>
 
+          <div class="file-tags" v-if="selectedFile.tags?.length">
+            <span
+              v-for="tag in selectedFile.tags"
+              :key="tag.id"
+              class="tag-pill removable-tag"
+              @click="removeTagFromFile(selectedFile, tag)"
+              title="Remove tag"
+            >
+              {{ tag.name }} ×
+            </span>
+          </div>
+
+          <div class="tag-input-row">
+            <input
+              v-model="newTagName"
+              type="text"
+              placeholder="Add tag"
+              class="text-input"
+              @keyup.enter="addTagToFile(selectedFile)"
+            />
+            <button
+              class="secondary-button small-button"
+              @click="addTagToFile(selectedFile)"
+            >
+              Add tag
+            </button>
+          </div>
+
           <div class="detail-view-toggle">
             <button
               class="secondary-button small-button"
@@ -842,6 +918,16 @@ async function loadFileAcfTrace(fileId) {
               </div>
 
               <div class="file-meta">{{ file.object_key }}</div>
+
+              <div class="file-tags-inline" v-if="file.tags?.length">
+                <span
+                  v-for="tag in file.tags"
+                  :key="tag.id"
+                  class="tag-pill"
+                >
+                  {{ tag.name }}
+                </span>
+              </div>
 
               <div class="preview-stack">
                 <div class="preview-block">
@@ -1245,6 +1331,46 @@ h4 {
   font-size: 0.75rem;
   font-weight: 600;
   color: #666;
+}
+
+.file-tags,
+.file-tags-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.file-tags-inline {
+  margin-top: 0.5rem;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #445;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.removable-tag {
+  cursor: pointer;
+}
+
+.removable-tag:hover {
+  background: #e0e7ff;
+}
+
+.tag-input-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.tag-input-row .text-input {
+  max-width: 220px;
 }
 
 </style>
