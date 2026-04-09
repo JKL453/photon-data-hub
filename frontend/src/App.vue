@@ -17,6 +17,9 @@
   const editDatasetName = ref("")
   const editDatasetDescription = ref("")
   const savingDataset = ref(false)
+  const editDatasetNotes = ref("")
+  const fileNotesDraft = ref("")
+  const savingFileNotes = ref(false)
   const selectedFileIds = ref([])
   const selectedFile = ref(null)
   const deletingSelectedFiles = ref(false)
@@ -185,6 +188,22 @@ async function removeTagFromFile(file, tag) {
   }
 }
 
+function sortDatasetFiles(files) {
+  return [...files].sort((a, b) => {
+    const aTime = a.created_at ? new Date(a.created_at).getTime() : NaN
+    const bTime = b.created_at ? new Date(b.created_at).getTime() : NaN
+
+    const aHasValidTime = Number.isFinite(aTime)
+    const bHasValidTime = Number.isFinite(bTime)
+
+    if (aHasValidTime && bHasValidTime && aTime !== bTime) {
+      return aTime - bTime
+    }
+
+    return (a._listOrder ?? 0) - (b._listOrder ?? 0)
+  })
+}
+
   async function selectDataset(datasetId) {
   loadingDatasetDetail.value = true
   errorMessage.value = ""
@@ -194,7 +213,7 @@ async function removeTagFromFile(file, tag) {
     const dataset = response.data
 
     const filesWithPreviews = await Promise.all(
-      dataset.files.map(async (file) => {
+      dataset.files.map(async (file, index) => {
         const tracePreview = await loadTraceThumbPreview(file.id)
         const acfPreview = await loadAcfThumbPreview(file.id)
         const tags = await loadFileTags(file.id)
@@ -204,6 +223,7 @@ async function removeTagFromFile(file, tag) {
           tracePreview,
           acfPreview,
           tags,
+          _listOrder: index,
         }
       })
     )
@@ -226,6 +246,7 @@ async function removeTagFromFile(file, tag) {
   }
   editDatasetName.value = selectedDataset.value.name
   editDatasetDescription.value = selectedDataset.value.description
+  editDatasetNotes.value = selectedDataset.value.notes || ""
 }
 
   onMounted(async () => {
@@ -256,11 +277,13 @@ async function updateDataset() {
       {
         name: editDatasetName.value,
         description: editDatasetDescription.value,
+        notes: editDatasetNotes.value,
       }
     )
 
     selectedDataset.value.name = editDatasetName.value
     selectedDataset.value.description = editDatasetDescription.value
+    selectedDataset.value.notes = editDatasetNotes.value
 
     await loadDatasets()
 
@@ -534,7 +557,42 @@ async function openFileDetail(file) {
   selectedFile.value = file
   selectedDetailView.value = "trace"
   fileAcfTrace.value = null
+  fileNotesDraft.value = file.notes || ""
   await loadFileDetailTrace(file.id)
+}
+
+async function saveFileNotes() {
+  if (!selectedFile.value) return
+
+  savingFileNotes.value = true
+  errorMessage.value = ""
+
+  try {
+    const response = await axios.patch(
+      `http://localhost:8000/files/${selectedFile.value.id}`,
+      {
+        notes: fileNotesDraft.value,
+      }
+    )
+
+    selectedFile.value.notes = response.data.notes
+
+    if (selectedDataset.value) {
+      const fileIndex = selectedDataset.value.files.findIndex(
+        (file) => file.id === selectedFile.value.id
+      )
+
+      if (fileIndex !== -1) {
+        selectedDataset.value.files[fileIndex].notes = response.data.notes
+
+      }
+    }
+  } catch (error) {
+    console.error("Fehler beim Speichern der File-Notizen:", error)
+    errorMessage.value = "File-Notizen konnten nicht gespeichert werden."
+  } finally {
+    savingFileNotes.value = false
+  }
 }
 
 
@@ -653,6 +711,22 @@ async function loadFileAcfTrace(fileId) {
 
           <h3>{{ selectedFile.filename }}</h3>
           <p class="file-meta">{{ selectedFile.object_key }}</p>
+          <div class="file-notes-section">
+            <label class="notes-label" for="file-notes-textarea">File notes</label>
+            <textarea
+              id="file-notes-textarea"
+              v-model="fileNotesDraft"
+              class="text-input textarea-input"
+              placeholder="Add notes for this file"
+            ></textarea>
+            <button
+              class="secondary-button small-button save-notes-button"
+              @click="saveFileNotes"
+              :disabled="savingFileNotes"
+            >
+              {{ savingFileNotes ? "Saving..." : "Save notes" }}
+            </button>
+          </div>
 
           <div class="file-tags" v-if="selectedFile.tags?.length">
             <span
@@ -792,6 +866,11 @@ async function loadFileAcfTrace(fileId) {
               v-model="editDatasetDescription"
               class="text-input textarea-input"
               placeholder="Description"
+            ></textarea>
+            <textarea
+              v-model="editDatasetNotes"
+              class="text-input textarea-input"
+              placeholder="Dataset notes"
             ></textarea>
 
             <button
@@ -1371,6 +1450,22 @@ h4 {
 
 .tag-input-row .text-input {
   max-width: 220px;
+}
+
+.file-notes-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.notes-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #555;
+}
+
+.save-notes-button {
+  align-self: flex-start;
 }
 
 </style>

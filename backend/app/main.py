@@ -17,7 +17,7 @@ from app.models.file_tag import FileTag
 from app.models.tags import Tag
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead, DatasetUpdate
-from app.schemas.file import FileCreate, FileRead, BulkMoveFilesRequest, BulkDeleteFilesRequest
+from app.schemas.file import FileCreate, FileRead, FileUpdate, BulkMoveFilesRequest, BulkDeleteFilesRequest
 from app.schemas.file_preview import FilePreviewRead
 from app.schemas.tag import TagCreate, TagRead
 from app.services.storage import upload_fileobj, get_s3_public_client, delete_object
@@ -165,7 +165,11 @@ def get_dataset(dataset_id: uuid.UUID, db: Session = Depends(get_db)):
 
     if dataset is None:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    
+
+    dataset.files = sorted(
+        dataset.files,
+        key=lambda file: (file.created_at or datetime.min.replace(tzinfo=timezone.utc), str(file.id)),
+    )
     return dataset
 
 
@@ -184,6 +188,8 @@ def update_dataset(
         dataset.name = dataset_in.name
     if dataset_in.description is not None:
         dataset.description = dataset_in.description
+    if dataset_in.notes is not None:
+        dataset.notes = dataset_in.notes
 
     try:
         db.commit()
@@ -233,8 +239,35 @@ def list_files_for_dataset(
     dataset_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
-    files = db.query(File).filter(File.dataset_id == dataset_id).all()
+    files = db.query(File).filter(File.dataset_id == dataset_id).order_by(File.created_at, File.id).all()
     return files
+
+
+@app.patch("/files/{file_id}", response_model=FileRead)
+def update_file(
+    file_id: uuid.UUID,
+    file_in: FileUpdate,
+    db: Session = Depends(get_db),
+):
+    file = db.query(File).filter(File.id == file_id).first()
+
+    if file is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if file_in.filename is not None:
+        file.filename = file_in.filename
+
+    if file_in.notes is not None:
+        file.notes = file_in.notes
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error updating file")
+
+    db.refresh(file)
+    return file
 
 
 @app.post("/datasets/{dataset_id}/upload", response_model=FileRead)

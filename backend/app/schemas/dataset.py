@@ -7,6 +7,7 @@ from app.schemas.file import FileRead
 class DatasetCreate(BaseModel):
     name: str
     description: str | None = None
+    notes: str | None = None
 
 
 class DatasetRead(BaseModel):
@@ -16,6 +17,7 @@ class DatasetRead(BaseModel):
     created_at: datetime
     owner_id: uuid.UUID
     files: list[FileRead] = []
+    notes: str | None 
 
     class Config:
         from_attributes = True
@@ -33,3 +35,4 @@ class DatasetListRead(BaseModel):
 class DatasetUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    notes: str | None = None
