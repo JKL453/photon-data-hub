@@ -16,6 +16,9 @@ class FileRead(BaseModel):
     created_at: datetime
     dataset_id: uuid.UUID
     notes: str | None
+    measurement_date: datetime | None 
+    excitation_power: float | None
+    objective: str | None
 
     class Config:
         from_attributes = True
@@ -24,6 +27,9 @@ class FileRead(BaseModel):
 class FileUpdate(BaseModel):
     filename: str | None = None
     notes: str | None = None
+    measurement_date: datetime | None = None
+    excitation_power: float | None = None
+    objective: str | None = None
 
 
 class BulkMoveFilesRequest(BaseModel):

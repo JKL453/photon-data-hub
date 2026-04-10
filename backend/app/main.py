@@ -260,6 +260,15 @@ def update_file(
     if file_in.notes is not None:
         file.notes = file_in.notes
 
+    if file_in.measurement_date is not None:
+        file.measurement_date = file_in.measurement_date
+
+    if file_in.excitation_power is not None:
+        file.excitation_power = file_in.excitation_power
+
+    if file_in.objective is not None:
+        file.objective = file_in.objective
+
     try:
         db.commit()
     except IntegrityError:

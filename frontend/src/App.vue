@@ -20,6 +20,9 @@
   const editDatasetNotes = ref("")
   const fileNotesDraft = ref("")
   const savingFileNotes = ref(false)
+  const fileMeasurementDateDraft = ref("")
+  const fileExcitationPowerDraft = ref("")
+  const fileObjectiveDraft = ref("")
   const selectedFileIds = ref([])
   const selectedFile = ref(null)
   const deletingSelectedFiles = ref(false)
@@ -558,6 +561,9 @@ async function openFileDetail(file) {
   selectedDetailView.value = "trace"
   fileAcfTrace.value = null
   fileNotesDraft.value = file.notes || ""
+  fileMeasurementDateDraft.value = file.measurement_date || ""
+  fileExcitationPowerDraft.value = file.excitation_power ?? ""
+  fileObjectiveDraft.value = file.objective || ""
   await loadFileDetailTrace(file.id)
 }
 
@@ -572,10 +578,17 @@ async function saveFileNotes() {
       `http://localhost:8000/files/${selectedFile.value.id}`,
       {
         notes: fileNotesDraft.value,
+        measurement_date: fileMeasurementDateDraft.value || null,
+        excitation_power:
+          fileExcitationPowerDraft.value === "" ? null : Number(fileExcitationPowerDraft.value),
+        objective: fileObjectiveDraft.value || null,
       }
     )
 
     selectedFile.value.notes = response.data.notes
+    selectedFile.value.measurement_date = response.data.measurement_date
+    selectedFile.value.excitation_power = response.data.excitation_power
+    selectedFile.value.objective = response.data.objective
 
     if (selectedDataset.value) {
       const fileIndex = selectedDataset.value.files.findIndex(
@@ -584,7 +597,9 @@ async function saveFileNotes() {
 
       if (fileIndex !== -1) {
         selectedDataset.value.files[fileIndex].notes = response.data.notes
-
+        selectedDataset.value.files[fileIndex].measurement_date = response.data.measurement_date
+        selectedDataset.value.files[fileIndex].excitation_power = response.data.excitation_power
+        selectedDataset.value.files[fileIndex].objective = response.data.objective
       }
     }
   } catch (error) {
@@ -719,6 +734,40 @@ async function loadFileAcfTrace(fileId) {
               class="text-input textarea-input"
               placeholder="Add notes for this file"
             ></textarea>
+
+            <div class="file-metadata-grid">
+              <label>
+                Measurement date
+                <input
+                  v-model="fileMeasurementDateDraft"
+                  type="datetime-local"
+                  class="text-input"
+                />
+              </label>
+
+              <label>
+                Excitation power (µW)
+                <input
+                  v-model="fileExcitationPowerDraft"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  class="text-input"
+                  placeholder="e.g. 5"
+                />
+              </label>
+
+              <label>
+                Objective
+                <input
+                  v-model="fileObjectiveDraft"
+                  type="text"
+                  class="text-input"
+                  placeholder="e.g. Plan Apo"
+                />
+              </label>
+            </div>
+
             <button
               class="secondary-button small-button save-notes-button"
               @click="saveFileNotes"
@@ -1456,6 +1505,19 @@ h4 {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.file-metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.file-metadata-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
 }
 
 .notes-label {
