@@ -27,6 +27,8 @@
   const bulkExcitationPowerDraft = ref("")
   const bulkObjectiveDraft = ref("")
   const savingBulkMetadata = ref(false)
+  const uploadMetadataSuggestions = ref([])
+  const applyingUploadMetadata = ref(false)
   const selectedFileIds = ref([])
   const selectedFile = ref(null)
   const deletingSelectedFiles = ref(false)
@@ -468,6 +470,94 @@ async function copySelectedFiles() {
 
 
 
+function formatLastModifiedForDatetimeLocal(lastModifiedMs) {
+  if (!lastModifiedMs) return ""
+
+  const date = new Date(lastModifiedMs)
+  if (Number.isNaN(date.getTime())) return ""
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  const hours = String(date.getHours()).padStart(2, "0")
+  const minutes = String(date.getMinutes()).padStart(2, "0")
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+function parseExcitationPowerFromFilename(filename) {
+  if (!filename) return null
+
+  const patterns = [
+    /(\d+(?:[\.,]\d+)?)\s*(?:uW|µW)\b/i,
+    /(\d+(?:[\.,]\d+)?)\s*(?:mW)\b/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = filename.match(pattern)
+    if (!match) continue
+
+    const rawValue = match[1].replace(",", ".")
+    const value = Number(rawValue)
+
+    if (Number.isFinite(value)) {
+      if (/mW/i.test(match[0])) {
+        return value * 1000
+      }
+      return value
+    }
+  }
+
+  return null
+}
+
+function buildDetectedMetadataSuggestion(uploadedFileId, browserFile) {
+  const detectedMeasurementDate = formatLastModifiedForDatetimeLocal(browserFile.lastModified)
+  const detectedExcitationPower = parseExcitationPowerFromFilename(browserFile.name)
+
+  if (!detectedMeasurementDate && detectedExcitationPower == null) {
+    return null
+  }
+
+  return {
+    fileId: uploadedFileId,
+    filename: browserFile.name,
+    measurement_date: detectedMeasurementDate || null,
+    excitation_power: detectedExcitationPower,
+  }
+}
+
+async function applyUploadMetadataSuggestions() {
+  if (uploadMetadataSuggestions.value.length === 0) {
+    return
+  }
+
+  applyingUploadMetadata.value = true
+  errorMessage.value = ""
+
+  try {
+    await Promise.all(
+      uploadMetadataSuggestions.value.map((suggestion) =>
+        axios.patch(`http://localhost:8000/files/${suggestion.fileId}`, {
+          measurement_date: suggestion.measurement_date,
+          excitation_power: suggestion.excitation_power,
+        })
+      )
+    )
+
+    uploadMetadataSuggestions.value = []
+
+    if (selectedDataset.value) {
+      await selectDataset(selectedDataset.value.id)
+    }
+  } catch (error) {
+    console.error("Detected metadata could not be applied:", error)
+    errorMessage.value = "Erkannte Metadaten konnten nicht übernommen werden."
+  } finally {
+    applyingUploadMetadata.value = false
+  }
+}
+
 async function updateSelectedMetadata() {
   if (!selectedDataset.value || selectedFileIds.value.length === 0) {
     return
@@ -516,6 +606,7 @@ async function handleFileUpload(event) {
   errorMessage.value = ""
 
   try {
+    const detectedSuggestions = []
     for (let index = 0; index < files.length; index++) {
       const file = files[index]
       const formData = new FormData()
@@ -541,6 +632,11 @@ async function handleFileUpload(event) {
 
       const uploadedFile = response.data
 
+      const suggestion = buildDetectedMetadataSuggestion(uploadedFile.id, file)
+      if (suggestion) {
+        detectedSuggestions.push(suggestion)
+      }
+
       try {
         await axios.post(
           `http://localhost:8000/files/${uploadedFile.id}/previews/generate-trace-thumb`
@@ -549,6 +645,8 @@ async function handleFileUpload(event) {
         console.error("Preview-Generierung fehlgeschlagen:", previewError)
       }
     }
+
+    uploadMetadataSuggestions.value = detectedSuggestions
 
     await selectDataset(selectedDataset.value.id)
     await loadDatasets()
@@ -1000,6 +1098,46 @@ async function loadFileAcfTrace(fileId) {
               </div>
               <div class="upload-progress-percent">{{ uploadProgressPercent }}%</div>
             </div>
+          </div>
+
+          <div v-if="uploadMetadataSuggestions.length > 0" class="upload-detection-panel">
+            <div class="upload-detection-header">
+              <strong>Detected metadata for uploaded files</strong>
+              <div class="upload-detection-actions">
+                <button
+                  class="secondary-button small-button"
+                  @click="applyUploadMetadataSuggestions"
+                  :disabled="applyingUploadMetadata"
+                >
+                  {{ applyingUploadMetadata ? "Applying..." : "Apply detected metadata" }}
+                </button>
+                <button
+                  class="secondary-button small-button"
+                  @click="uploadMetadataSuggestions = []"
+                  :disabled="applyingUploadMetadata"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+
+            <ul class="upload-detection-list">
+              <li
+                v-for="suggestion in uploadMetadataSuggestions"
+                :key="suggestion.fileId"
+                class="upload-detection-item"
+              >
+                <div class="upload-detection-filename">{{ suggestion.filename }}</div>
+                <div class="upload-detection-meta">
+                  <span v-if="suggestion.measurement_date">
+                    Date: {{ suggestion.measurement_date }}
+                  </span>
+                  <span v-if="suggestion.excitation_power != null">
+                    Power: {{ suggestion.excitation_power }} µW
+                  </span>
+                </div>
+              </li>
+            </ul>
           </div>
 
           <div v-if="selectedDataset.files.length > 0" class="file-actions-bar">
@@ -1466,6 +1604,58 @@ h4 {
 .upload-progress-percent {
   font-size: 0.8rem;
   color: #666;
+}
+
+.upload-detection-panel {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #d9deea;
+  border-radius: 12px;
+  background: #fafbff;
+}
+
+.upload-detection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.upload-detection-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.upload-detection-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.upload-detection-item {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #e8ebf3;
+  border-radius: 10px;
+  background: white;
+}
+
+.upload-detection-filename {
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.upload-detection-meta {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  color: #555;
+  font-size: 0.9rem;
 }
 
 .clickable-file {
