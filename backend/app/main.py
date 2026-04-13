@@ -17,7 +17,7 @@ from app.models.file_tag import FileTag
 from app.models.tags import Tag
 from app.schemas.user import UserCreate, UserRead
 from app.schemas.dataset import DatasetCreate, DatasetRead, DatasetListRead, DatasetUpdate
-from app.schemas.file import FileCreate, FileRead, FileUpdate, BulkMoveFilesRequest, BulkDeleteFilesRequest
+from app.schemas.file import FileCreate, FileRead, FileUpdate, BulkMoveFilesRequest, BulkDeleteFilesRequest, BulkMetadataUpdateRequest
 from app.schemas.file_preview import FilePreviewRead
 from app.schemas.tag import TagCreate, TagRead
 from app.services.storage import upload_fileobj, get_s3_public_client, delete_object
@@ -622,6 +622,39 @@ def bulk_copy_files(request: BulkMoveFilesRequest, db: Session = Depends(get_db)
         "copied_files": [str(f.id) for f in new_files],
         "count": len(new_files),
     }
+
+
+@app.post("/files/bulk-update-metadata")
+def bulk_update_metadata(
+    request: BulkMetadataUpdateRequest,
+    db: Session = Depends(get_db),
+):
+    if not request.file_ids:
+        raise HTTPException(status_code=400, detail="file_ids required")
+
+    files = db.query(File).filter(File.id.in_(request.file_ids)).all()
+
+    if len(files) != len(request.file_ids):
+        raise HTTPException(status_code=404, detail="One or more files not found")
+
+    for file in files:
+        if request.measurement_date is not None:
+            file.measurement_date = request.measurement_date
+
+        if request.excitation_power is not None:
+            file.excitation_power = request.excitation_power
+
+        if request.objective is not None:
+            file.objective = request.objective
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error updating file metadata")
+
+    return {"updated": len(files)}
+
 
 
 @app.get("/files/{file_id}/acf-detail")

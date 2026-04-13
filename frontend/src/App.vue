@@ -23,6 +23,10 @@
   const fileMeasurementDateDraft = ref("")
   const fileExcitationPowerDraft = ref("")
   const fileObjectiveDraft = ref("")
+  const bulkMeasurementDateDraft = ref("")
+  const bulkExcitationPowerDraft = ref("")
+  const bulkObjectiveDraft = ref("")
+  const savingBulkMetadata = ref(false)
   const selectedFileIds = ref([])
   const selectedFile = ref(null)
   const deletingSelectedFiles = ref(false)
@@ -462,6 +466,35 @@ async function copySelectedFiles() {
   }
 }
 
+
+
+async function updateSelectedMetadata() {
+  if (!selectedDataset.value || selectedFileIds.value.length === 0) {
+    return
+  }
+
+  savingBulkMetadata.value = true
+  errorMessage.value = ""
+
+  try {
+    await axios.post("http://localhost:8000/files/bulk-update-metadata", {
+      file_ids: selectedFileIds.value,
+      measurement_date: bulkMeasurementDateDraft.value || null,
+      excitation_power:
+        bulkExcitationPowerDraft.value === ""
+          ? null
+          : Number(bulkExcitationPowerDraft.value),
+      objective: bulkObjectiveDraft.value || null,
+    })
+
+    await selectDataset(selectedDataset.value.id)
+  } catch (error) {
+    console.error("Fehler beim Bulk-Update der Metadaten:", error)
+    errorMessage.value = "Metadaten konnten nicht gesammelt gesetzt werden."
+  } finally {
+    savingBulkMetadata.value = false
+  }
+}
 
 function openFilePicker() {
   const input = document.getElementById("dataset-file-upload")
@@ -1020,6 +1053,39 @@ async function loadFileAcfTrace(fileId) {
                 </button>
               </div>
 
+              <div class="bulk-metadata-panel">
+                <input
+                  v-model="bulkMeasurementDateDraft"
+                  type="datetime-local"
+                  class="text-input"
+                  placeholder="Measurement date"
+                />
+
+                <input
+                  v-model="bulkExcitationPowerDraft"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  class="text-input"
+                  placeholder="Power (µW)"
+                />
+
+                <input
+                  v-model="bulkObjectiveDraft"
+                  type="text"
+                  class="text-input"
+                  placeholder="Objective"
+                />
+
+                <button
+                  class="secondary-button small-button"
+                  @click="updateSelectedMetadata"
+                  :disabled="selectedFileIds.length === 0 || savingBulkMetadata"
+                >
+                  {{ savingBulkMetadata ? "Saving..." : "Set metadata" }}
+                </button>
+              </div>
+
               <div class="selected-files-info">
                 {{ selectedFileIds.length }} file(s) selected
               </div>
@@ -1313,6 +1379,13 @@ h4 {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+.bulk-metadata-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem;
+  align-items: end;
 }
 
 .selected-files-info {

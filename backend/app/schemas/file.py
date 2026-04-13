@@ -39,3 +39,10 @@ class BulkMoveFilesRequest(BaseModel):
 
 class BulkDeleteFilesRequest(BaseModel):
     file_ids: list[uuid.UUID]
+
+
+class BulkMetadataUpdateRequest(BaseModel):
+    file_ids: list[uuid.UUID]
+    measurement_date: datetime | None = None
+    excitation_power: float | None = None
+    objective: str | None = None
