@@ -485,15 +485,44 @@ function formatLastModifiedForDatetimeLocal(lastModifiedMs) {
   return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
+function formatApiDatetimeForInput(value) {
+  if (!value) return ""
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return typeof value === "string" ? value.slice(0, 16) : ""
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  const hours = String(date.getHours()).padStart(2, "0")
+  const minutes = String(date.getMinutes()).padStart(2, "0")
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+function convertDatetimeLocalToApiValue(value) {
+  if (!value) return null
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return date.toISOString()
+}
+
 function parseExcitationPowerFromFilename(filename) {
   if (!filename) return null
 
   const patterns = [
-    /(\d+(?:[\.,]\d+)?)\s*(?:uW|µW)\b/i,
-    /(\d+(?:[\.,]\d+)?)\s*(?:mW)\b/i,
+    { pattern: /(\d+(?:[\.,]\d+)?)\s*(?:uW|µW)(?=[^a-zA-Z]|$)/i, factor: 1 },
+    { pattern: /(\d+(?:[\.,]\d+)?)\s*(?:mW)(?=[^a-zA-Z]|$)/i, factor: 1000 },
+    { pattern: /(\d+(?:[\.,]\d+)?)\s*(?:W)(?=[^a-zA-Z]|$)/i, factor: 1000000 },
   ]
 
-  for (const pattern of patterns) {
+  for (const { pattern, factor } of patterns) {
     const match = filename.match(pattern)
     if (!match) continue
 
@@ -501,10 +530,7 @@ function parseExcitationPowerFromFilename(filename) {
     const value = Number(rawValue)
 
     if (Number.isFinite(value)) {
-      if (/mW/i.test(match[0])) {
-        return value * 1000
-      }
-      return value
+      return value * factor
     }
   }
 
@@ -539,7 +565,7 @@ async function applyUploadMetadataSuggestions() {
     await Promise.all(
       uploadMetadataSuggestions.value.map((suggestion) =>
         axios.patch(`http://localhost:8000/files/${suggestion.fileId}`, {
-          measurement_date: suggestion.measurement_date,
+          measurement_date: convertDatetimeLocalToApiValue(suggestion.measurement_date),
           excitation_power: suggestion.excitation_power,
         })
       )
@@ -569,7 +595,7 @@ async function updateSelectedMetadata() {
   try {
     await axios.post("http://localhost:8000/files/bulk-update-metadata", {
       file_ids: selectedFileIds.value,
-      measurement_date: bulkMeasurementDateDraft.value || null,
+      measurement_date: convertDatetimeLocalToApiValue(bulkMeasurementDateDraft.value),
       excitation_power:
         bulkExcitationPowerDraft.value === ""
           ? null
@@ -692,7 +718,7 @@ async function openFileDetail(file) {
   selectedDetailView.value = "trace"
   fileAcfTrace.value = null
   fileNotesDraft.value = file.notes || ""
-  fileMeasurementDateDraft.value = file.measurement_date || ""
+  fileMeasurementDateDraft.value = formatApiDatetimeForInput(file.measurement_date)
   fileExcitationPowerDraft.value = file.excitation_power ?? ""
   fileObjectiveDraft.value = file.objective || ""
   await loadFileDetailTrace(file.id)
@@ -709,7 +735,7 @@ async function saveFileNotes() {
       `http://localhost:8000/files/${selectedFile.value.id}`,
       {
         notes: fileNotesDraft.value,
-        measurement_date: fileMeasurementDateDraft.value || null,
+        measurement_date: convertDatetimeLocalToApiValue(fileMeasurementDateDraft.value),
         excitation_power:
           fileExcitationPowerDraft.value === "" ? null : Number(fileExcitationPowerDraft.value),
         objective: fileObjectiveDraft.value || null,
