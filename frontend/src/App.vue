@@ -908,177 +908,201 @@ async function loadFileAcfTrace(fileId) {
                 label="← Back to dataset"
                 @click="selectedFile = null; fileDetailTrace = null; fileAcfTrace = null"
               />
+              <div class="file-detail-grid">
+                <div class="file-detail-main-column">
+                  <Card class="sub-card">
+                    <template #title>File Info</template>
+                    <template #content>
+                      <div class="panel-content">
+                        <h3>{{ selectedFile.filename }}</h3>
+                        <p class="file-meta">{{ selectedFile.object_key }}</p>
 
-              <h3>{{ selectedFile.filename }}</h3>
-              <p class="file-meta">{{ selectedFile.object_key }}</p>
-              <div class="file-notes-section">
-                <label class="notes-label" for="file-notes-textarea">File notes</label>
-                <Textarea
-                  id="file-notes-textarea"
-                  v-model="fileNotesDraft"
-                  class="text-input textarea-input"
-                  placeholder="Add notes for this file"
-                />
+                        <div class="file-tags" v-if="selectedFile.tags?.length">
+                          <span
+                            v-for="tag in selectedFile.tags"
+                            :key="tag.id"
+                            class="tag-pill removable-tag"
+                            @click="removeTagFromFile(selectedFile, tag)"
+                            title="Remove tag"
+                          >
+                            {{ tag.name }} ×
+                          </span>
+                        </div>
 
-                <div class="file-metadata-grid">
-                  <label>
-                    Measurement date
-                    <input
-                      v-model="fileMeasurementDateDraft"
-                      type="datetime-local"
-                      class="text-input"
-                    />
-                  </label>
+                        <div class="tag-input-row">
+                          <InputText
+                            v-model="newTagName"
+                            placeholder="Add tag"
+                            class="text-input"
+                            @keyup.enter="addTagToFile(selectedFile)"
+                          />
+                          <Button
+                            class="secondary-button small-button"
+                            label="Add tag"
+                            @click="addTagToFile(selectedFile)"
+                          />
+                        </div>
+                      </div>
+                    </template>
+                  </Card>
 
-                  <label>
-                    Excitation power (µW)
-                    <input
-                      v-model="fileExcitationPowerDraft"
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      class="text-input"
-                      placeholder="e.g. 5"
-                    />
-                  </label>
+                  <Card class="sub-card file-analysis-card">
+                    <template #title>Analysis</template>
+                    <template #content>
+                      <div class="panel-content">
+                        <div class="detail-view-toggle">
+                          <Button
+                            class="secondary-button small-button"
+                            :class="{'active-toggle': selectedDetailView === 'trace' }"
+                            label="Trace"
+                            @click="switchDetailView('trace')"
+                          />
 
-                  <label>
-                    Objective
-                    <input
-                      v-model="fileObjectiveDraft"
-                      type="text"
-                      class="text-input"
-                      placeholder="e.g. Plan Apo"
-                    />
-                  </label>
+                          <Button
+                            class="secondary-button small-button"
+                            :class="{'active-toggle': selectedDetailView === 'acf' }"
+                            label="ACF"
+                            @click="switchDetailView('acf')"
+                          />
+                        </div>
+
+                        <div v-if="selectedDetailView === 'trace'" class="detail-controls">
+                          <label for="bin-width-select">Bin width:</label>
+                          <Select
+                            id="bin-width-select"
+                            v-model="selectedDetailBinWidthMs"
+                            :options="detailBinWidthOptions"
+                            optionLabel="label"
+                            optionValue="value"
+                            class="text-input"
+                            @change="loadFileDetailTrace(selectedFile.id)"
+                          />
+                        </div>
+
+                        <div v-if="selectedDetailView === 'acf'" class="detail-controls detail-controls-grid">
+                          <label>
+                            Bins/dec
+                            <input v-model.number="acfBinsPerDec" type="number" min="1" class="text-input" />
+                          </label>
+
+                          <label>
+                            Lag min exp
+                            <input v-model.number="acfLagMinExp" type="number" class="text-input" />
+                          </label>
+
+                          <label>
+                            Lag max exp
+                            <input v-model.number="acfLagMaxExp" type="number" class="text-input" />
+                          </label>
+
+                          <label>
+                            Cut points
+                            <input v-model.number="acfCutPoints" type="number" min="0" class="text-input" />
+                          </label>
+
+                          <label>
+                            τ min (µs)
+                            <input v-model.number="acfTauMinUs" type="number" min="0" step="0.1" class="text-input" />
+                          </label>
+
+                          <label>
+                            τ max (µs, 0 = none)
+                            <input v-model.number="acfTauMaxUs" type="number" min="0" step="0.1" class="text-input" />
+                          </label>
+
+                          <Button
+                            class="secondary-button small-button"
+                            :label="loadingFileAcfTrace ? 'Loading...' : 'Update ACF'"
+                            :loading="loadingFileAcfTrace"
+                            :disabled="loadingFileAcfTrace"
+                            @click="loadFileAcfTrace(selectedFile.id)"
+                          />
+                        </div>
+
+                        <TracePreview
+                          v-if="selectedDetailView === 'trace' && fileDetailTrace"
+                          :preview="fileDetailTrace"
+                          variant="detail"
+                        />
+
+                        <TracePreview
+                          v-else-if="selectedDetailView === 'acf' && fileAcfTrace"
+                          :preview="fileAcfTrace"
+                          variant="detail"
+                        />
+
+                        <p v-else-if="selectedDetailView === 'trace' && loadingFileDetailTrace" class="empty-state">
+                          Lade Detail-Trace ...
+                        </p>
+
+                        <p v-else-if="selectedDetailView === 'acf' && loadingFileAcfTrace" class="empty-state">
+                          Lade ACF/CCF ...
+                        </p>
+
+                        <p v-else class="empty-state">Keine Daten für diese Ansicht vorhanden.</p>
+                      </div>
+                    </template>
+                  </Card>
                 </div>
 
-                <Button
-                  class="secondary-button small-button save-notes-button"
-                  :label="savingFileNotes ? 'Saving...' : 'Save notes'"
-                  :loading="savingFileNotes"
-                  :disabled="savingFileNotes"
-                  @click="saveFileNotes"
-                />
+                <Card class="sub-card file-metadata-card">
+                  <template #title>Notes & Metadata</template>
+                  <template #content>
+                    <div class="panel-content">
+                      <div class="file-notes-section">
+                        <label class="notes-label" for="file-notes-textarea">File notes</label>
+                        <Textarea
+                          id="file-notes-textarea"
+                          v-model="fileNotesDraft"
+                          class="text-input textarea-input"
+                          placeholder="Add notes for this file"
+                        />
+
+                        <div class="file-metadata-grid">
+                          <label>
+                            Measurement date
+                            <input
+                              v-model="fileMeasurementDateDraft"
+                              type="datetime-local"
+                              class="text-input"
+                            />
+                          </label>
+
+                          <label>
+                            Excitation power (µW)
+                            <input
+                              v-model="fileExcitationPowerDraft"
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              class="text-input"
+                              placeholder="e.g. 5"
+                            />
+                          </label>
+
+                          <label>
+                            Objective
+                            <input
+                              v-model="fileObjectiveDraft"
+                              type="text"
+                              class="text-input"
+                              placeholder="e.g. Plan Apo"
+                            />
+                          </label>
+                        </div>
+
+                        <Button
+                          class="secondary-button small-button save-notes-button"
+                          :label="savingFileNotes ? 'Saving...' : 'Save notes'"
+                          :loading="savingFileNotes"
+                          :disabled="savingFileNotes"
+                          @click="saveFileNotes"
+                        />
+                      </div>
+                    </div>
+                  </template>
+                </Card>
               </div>
-
-              <div class="file-tags" v-if="selectedFile.tags?.length">
-                <span
-                  v-for="tag in selectedFile.tags"
-                  :key="tag.id"
-                  class="tag-pill removable-tag"
-                  @click="removeTagFromFile(selectedFile, tag)"
-                  title="Remove tag"
-                >
-                  {{ tag.name }} ×
-                </span>
-              </div>
-
-              <div class="tag-input-row">
-                <InputText
-                  v-model="newTagName"
-                  placeholder="Add tag"
-                  class="text-input"
-                  @keyup.enter="addTagToFile(selectedFile)"
-                />
-                <Button
-                  class="secondary-button small-button"
-                  label="Add tag"
-                  @click="addTagToFile(selectedFile)"
-                />
-              </div>
-
-              <div class="detail-view-toggle">
-                <Button
-                  class="secondary-button small-button"
-                  :class="{'active-toggle': selectedDetailView === 'trace' }"
-                  label="Trace"
-                  @click="switchDetailView('trace')"
-                />
-
-                <Button
-                  class="secondary-button small-button"
-                  :class="{'active-toggle': selectedDetailView === 'acf' }"
-                  label="ACF"
-                  @click="switchDetailView('acf')"
-                />
-              </div>
-
-              <div v-if="selectedDetailView === 'trace'" class="detail-controls">
-                <label for="bin-width-select">Bin width:</label>
-                <Select
-                  id="bin-width-select"
-                  v-model="selectedDetailBinWidthMs"
-                  :options="detailBinWidthOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  class="text-input"
-                  @change="loadFileDetailTrace(selectedFile.id)"
-                />
-              </div>
-
-              <div v-if="selectedDetailView === 'acf'" class="detail-controls detail-controls-grid">
-                <label>
-                  Bins/dec
-                  <input v-model.number="acfBinsPerDec" type="number" min="1" class="text-input" />
-                </label>
-
-                <label>
-                  Lag min exp
-                  <input v-model.number="acfLagMinExp" type="number" class="text-input" />
-                </label>
-
-                <label>
-                  Lag max exp
-                  <input v-model.number="acfLagMaxExp" type="number" class="text-input" />
-                </label>
-
-                <label>
-                  Cut points
-                  <input v-model.number="acfCutPoints" type="number" min="0" class="text-input" />
-                </label>
-
-                <label>
-                  τ min (µs)
-                  <input v-model.number="acfTauMinUs" type="number" min="0" step="0.1" class="text-input" />
-                </label>
-
-                <label>
-                  τ max (µs, 0 = none)
-                  <input v-model.number="acfTauMaxUs" type="number" min="0" step="0.1" class="text-input" />
-                </label>
-
-                <Button
-                  class="secondary-button small-button"
-                  :label="loadingFileAcfTrace ? 'Loading...' : 'Update ACF'"
-                  :loading="loadingFileAcfTrace"
-                  :disabled="loadingFileAcfTrace"
-                  @click="loadFileAcfTrace(selectedFile.id)"
-                />
-              </div>
-
-
-              <TracePreview
-                v-if="selectedDetailView === 'trace' && fileDetailTrace"
-                :preview="fileDetailTrace"
-                variant="detail"
-              />
-
-              <TracePreview
-                v-else-if="selectedDetailView === 'acf' && fileAcfTrace"
-                :preview="fileAcfTrace"
-                variant="detail"
-              />
-
-              <p v-else-if="selectedDetailView === 'trace' && loadingFileDetailTrace" class="empty-state">
-                Lade Detail-Trace ...
-              </p>
-
-              <p v-else-if="selectedDetailView === 'acf' && loadingFileAcfTrace" class="empty-state">
-                Lade ACF/CCF ...
-              </p>
-
-              <p v-else class="empty-state">Keine Daten für diese Ansicht vorhanden.</p>
             </div>
 
             <div v-else-if="selectedDataset">
@@ -1721,6 +1745,33 @@ h4 {
   gap: 1rem;
 }
 
+.file-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.75fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.file-detail-main-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.file-metadata-card {
+  position: sticky;
+  top: 1rem;
+}
+
+.sub-card {
+  border-radius: 14px;
+}
+
+.file-analysis-card {
+  min-width: 0;
+}
+
 .detail-trace-preview {
   width: 100%;
 }
@@ -1877,4 +1928,12 @@ h4 {
   padding: 0.3rem 0.6rem;
 }
 
+@media (max-width: 900px) {
+  .file-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .file-metadata-card {
+    position: static;
+  }
+}
 </style>
