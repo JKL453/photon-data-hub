@@ -1151,7 +1151,7 @@ async function loadFileAcfTrace(fileId) {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
-  background: var(--p-surface-100);
+  background: var(--p-surface-ground, var(--p-content-background));
   color: var(--p-text-color);
   transition: grid-template-columns 0.18s ease;
 }
@@ -1161,13 +1161,13 @@ async function loadFileAcfTrace(fileId) {
 }
 
 .app-sidebar {
-  background: var(--p-surface-0);
+  background: var(--p-content-background);
   color: var(--p-text-color);
   padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  border-right: 1px solid var(--p-surface-200);
+  border-right: 1px solid var(--p-content-border-color);
   min-width: 0;
 }
 
@@ -1199,8 +1199,8 @@ async function loadFileAcfTrace(fileId) {
   border-radius: 8px;
   display: grid;
   place-items: center;
-  background: var(--p-primary-50);
-  border: 1px solid var(--p-primary-100);
+  background: color-mix(in srgb, var(--p-primary-color) 12%, var(--p-content-background));
+  border: 1px solid var(--p-content-border-color);
   flex: 0 0 auto;
 }
 
@@ -1262,10 +1262,10 @@ async function loadFileAcfTrace(fileId) {
 
 .sidebar-card {
   border-radius: 8px;
-  border: 1px solid var(--p-surface-200);
+  border: 1px solid var(--p-content-border-color);
   overflow: hidden;
   box-shadow: none;
-  background: var(--p-surface-50);
+  background: color-mix(in srgb, var(--p-content-background) 94%, var(--p-text-color) 6%);
 }
 
 .sidebar-rail {
@@ -1288,7 +1288,7 @@ async function loadFileAcfTrace(fileId) {
 
 .workspace-shell {
   border-radius: 8px;
-  border: 1px solid var(--p-surface-200);
+  border: 1px solid var(--p-content-border-color);
   box-shadow: var(--p-card-shadow);
   background: var(--p-content-background);
 }
@@ -1373,7 +1373,7 @@ async function loadFileAcfTrace(fileId) {
 }
 
 :deep(.dataset-menu .p-panelmenu-header-link:hover) {
-  background: var(--p-surface-100);
+  background: color-mix(in srgb, var(--p-content-background) 88%, var(--p-text-color) 12%);
 }
 
 :deep(.dataset-menu .p-panelmenu-content) {
@@ -1389,7 +1389,7 @@ async function loadFileAcfTrace(fileId) {
 }
 
 :deep(.dataset-menu .p-menuitem-link:hover) {
-  background: var(--p-surface-100);
+  background: color-mix(in srgb, var(--p-content-background) 88%, var(--p-text-color) 12%);
   color: var(--p-text-color);
 }
 
@@ -1426,7 +1426,7 @@ async function loadFileAcfTrace(fileId) {
 
   .app-sidebar {
     border-right: none;
-    border-bottom: 1px solid var(--p-surface-200);
+    border-bottom: 1px solid var(--p-content-border-color);
   }
 
   .app-main {

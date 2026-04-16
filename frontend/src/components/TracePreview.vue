@@ -41,6 +41,20 @@ const channelColors = {
   3: "#e74c3c",
 }
 
+function cssVar(name, fallback) {
+  if (typeof window === "undefined") return fallback
+
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return value || fallback
+}
+
+const chartTheme = computed(() => ({
+  background: cssVar("--p-content-background", "white"),
+  border: cssVar("--p-content-border-color", "#e5e7eb"),
+  text: cssVar("--p-text-color", "#1f2937"),
+  mutedText: cssVar("--p-text-muted-color", "#6b7280"),
+}))
+
 const hasSeries = computed(() => {
   return Array.isArray(props.preview?.series) && props.preview.series.length > 0
 })
@@ -72,11 +86,13 @@ const chartData = computed(() => {
 const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  color: chartTheme.value.text,
   plugins: {
     legend: {
       display: true,
       position: "bottom",
       labels: {
+        color: chartTheme.value.text,
         boxWidth: 10,
         boxHeight: 10,
         padding: 8,
@@ -99,8 +115,10 @@ const chartOptions = computed(() => ({
       title: {
         display: true,
         text: "Time (s)",
+        color: chartTheme.value.mutedText,
       },
       ticks: {
+        color: chartTheme.value.mutedText,
         maxTicksLimit: 6,
         callback(value) {
           const label = this.getLabelForValue(value)
@@ -113,11 +131,21 @@ const chartOptions = computed(() => ({
           return String(Math.round(num))
         },
       },
+      grid: {
+        color: chartTheme.value.border,
+      },
     },
     y: {
       title: {
         display: true,
         text: "Counts / bin",
+        color: chartTheme.value.mutedText,
+      },
+      ticks: {
+        color: chartTheme.value.mutedText,
+      },
+      grid: {
+        color: chartTheme.value.border,
       },
       beginAtZero: true,
     },
@@ -146,17 +174,36 @@ function renderPlotlyDetail() {
   const layout = {
     autosize: true,
     margin: { l: 55, r: 20, t: 20, b: 80 },
-    paper_bgcolor: "white",
-    plot_bgcolor: "white",
+    paper_bgcolor: chartTheme.value.background,
+    plot_bgcolor: chartTheme.value.background,
+    font: {
+      color: chartTheme.value.text,
+    },
     xaxis: {
       title: `Time (${props.preview?.x_unit ?? "s"})`,
       type: props.preview?.preview_kind === "acf_detail" ? "log" : "linear",
       zeroline: false,
+      gridcolor: chartTheme.value.border,
+      linecolor: chartTheme.value.border,
+      tickfont: {
+        color: chartTheme.value.mutedText,
+      },
+      titlefont: {
+        color: chartTheme.value.mutedText,
+      },
     },
     yaxis: {
       title: props.preview?.y_unit ?? "Counts / bin",
       zeroline: false,
       range: [1, null],
+      gridcolor: chartTheme.value.border,
+      linecolor: chartTheme.value.border,
+      tickfont: {
+        color: chartTheme.value.mutedText,
+      },
+      titlefont: {
+        color: chartTheme.value.mutedText,
+      },
     },
     legend: {
       orientation: "h",
@@ -166,6 +213,7 @@ function renderPlotlyDetail() {
       yanchor: "top",
       font: {
         size: 10,
+        color: chartTheme.value.text,
       },
     },
   }

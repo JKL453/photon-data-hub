@@ -333,6 +333,7 @@ function isFileSelected(selectedFileIds, fileId) {
               v-for="file in selectedDataset.files"
               :key="file.id"
               class="file-row"
+              :title="file.object_key"
               @click="emit('open-file-detail', file)"
             >
               <div class="file-row-meta">
@@ -371,16 +372,21 @@ function isFileSelected(selectedFileIds, fileId) {
                   </div>
                 </div>
 
-                <span class="file-meta">{{ file.object_key }}</span>
+                <div class="file-row-summary">
+                  <span class="file-path-hint">
+                    <i class="pi pi-cloud"></i>
+                    Stored object
+                  </span>
 
-                <div v-if="file.tags?.length" class="file-tags-inline">
-                  <Tag
-                    v-for="tag in file.tags"
-                    :key="tag.id"
-                    :value="tag.name"
-                    severity="info"
-                    rounded
-                  />
+                  <div v-if="file.tags?.length" class="file-tags-inline">
+                    <Tag
+                      v-for="tag in file.tags"
+                      :key="tag.id"
+                      :value="tag.name"
+                      severity="info"
+                      rounded
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -447,6 +453,13 @@ function isFileSelected(selectedFileIds, fileId) {
   flex-wrap: wrap;
 }
 
+.file-row-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .panel-content,
 .dataset-workspace,
 .loading-state,
@@ -502,10 +515,18 @@ function isFileSelected(selectedFileIds, fileId) {
 }
 
 .upload-progress-text,
-.file-meta {
+.file-meta,
+.file-path-hint {
   color: var(--p-text-muted-color);
   font-size: 0.9rem;
   word-break: break-word;
+}
+
+.file-path-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
 }
 
 .upload-detection-actions,
@@ -562,7 +583,7 @@ function isFileSelected(selectedFileIds, fileId) {
   padding: 0.75rem;
   border: 1px solid var(--p-content-border-color);
   border-radius: 8px;
-  background: var(--p-surface-0);
+  background: var(--p-content-background);
 }
 
 .preview-panel--trace {
