@@ -3,6 +3,9 @@
   import { ref, onMounted, computed } from "vue"
   import axios from "axios"
 
+  import DatasetSidebar from "./components/DatasetSidebar.vue"
+  import DatasetDetailPanel from "./components/DatasetDetailPanel.vue"
+  import FileDetailPanel from "./components/FileDetailPanel.vue"
   import TracePreview from "./components/TracePreview.vue"
 
   import Button from 'primevue/button'
@@ -10,6 +13,8 @@
   import InputText from 'primevue/inputtext'
   import Textarea from 'primevue/textarea'
   import Select from 'primevue/select'
+
+
 
 
   const datasets = ref([])
@@ -840,549 +845,133 @@ async function loadFileAcfTrace(fileId) {
 </script>
 
 
+// --------------------------------------------------------------------------------
+// -------------------------------- TEMPLATE --------------------------------------
+// --------------------------------------------------------------------------------
 
 
 <template>
-
   <div class="page">
     <h1>Photon Data Hub</h1>
 
-    <p v-if="loadingDatasets">Datasets werden geladen ...</p>
-    <p v-if="errorMessage">{{ errorMessage }}</p>
+    <div class="layout" :class="{ 'layout--file-selected': selectedFile }">
+      <DatasetSidebar
+        :datasets="datasets"
+        :loading-datasets="loadingDatasets"
+        :error-message="errorMessage"
+        :new-dataset-name="newDatasetName"
+        :new-dataset-description="newDatasetDescription"
+        :creating-dataset="creatingDataset"
+        @update:new-dataset-name="newDatasetName = $event"
+        @update:new-dataset-description="newDatasetDescription = $event"
+        @create-dataset="createDataset"
+        @select-dataset="selectDataset"
+      />
 
-    <div class="layout">
-      <Card class="panel-card">
-        <template #title>Datasets</template>
-        <template #content>
-          <div class="panel-content">
-            <p v-if="loadingDatasets">Datasets werden geladen ...</p>
-            <p v-if="errorMessage">{{ errorMessage }}</p>
+      <template v-if="selectedFile">
+        <FileDetailPanel
+          :selected-file="selectedFile"
+          :new-tag-name="newTagName"
+          :file-notes-draft="fileNotesDraft"
+          :file-measurement-date-draft="fileMeasurementDateDraft"
+          :file-excitation-power-draft="fileExcitationPowerDraft"
+          :file-objective-draft="fileObjectiveDraft"
+          :saving-file-notes="savingFileNotes"
+          :selected-detail-view="selectedDetailView"
+          :selected-detail-bin-width-ms="selectedDetailBinWidthMs"
+          :detail-bin-width-options="detailBinWidthOptions"
+          :file-detail-trace="fileDetailTrace"
+          :file-acf-trace="fileAcfTrace"
+          :loading-file-detail-trace="loadingFileDetailTrace"
+          :loading-file-acf-trace="loadingFileAcfTrace"
+          :acf-bins-per-dec="acfBinsPerDec"
+          :acf-lag-min-exp="acfLagMinExp"
+          :acf-lag-max-exp="acfLagMaxExp"
+          :acf-cut-points="acfCutPoints"
+          :acf-tau-min-us="acfTauMinUs"
+          :acf-tau-max-us="acfTauMaxUs"
+          @back="selectedFile = null; fileDetailTrace = null; fileAcfTrace = null"
+          @update:new-tag-name="newTagName = $event"
+          @add-tag="addTagToFile"
+          @remove-tag="removeTagFromFile"
+          @update:file-notes-draft="fileNotesDraft = $event"
+          @update:file-measurement-date-draft="fileMeasurementDateDraft = $event"
+          @update:file-excitation-power-draft="fileExcitationPowerDraft = $event"
+          @update:file-objective-draft="fileObjectiveDraft = $event"
+          @save-notes="saveFileNotes"
+          @switch-detail-view="switchDetailView"
+          @update:selected-detail-bin-width-ms="selectedDetailBinWidthMs = $event"
+          @load-detail-trace="loadFileDetailTrace"
+          @load-acf-trace="loadFileAcfTrace"
+          @update:acf-bins-per-dec="acfBinsPerDec = $event"
+          @update:acf-lag-min-exp="acfLagMinExp = $event"
+          @update:acf-lag-max-exp="acfLagMaxExp = $event"
+          @update:acf-cut-points="acfCutPoints = $event"
+          @update:acf-tau-min-us="acfTauMinUs = $event"
+          @update:acf-tau-max-us="acfTauMaxUs = $event"
+        />
+      </template>
 
-            <div class="create-dataset-form">
-              <InputText
-                v-model="newDatasetName"
-                placeholder="Dataset name"
-                class="text-input"
-              />
-
-              <Textarea
-                v-model="newDatasetDescription"
-                placeholder="Description"
-                class="text-input textarea-input"
-              />
-
-              <Button
-                :label="creatingDataset ? 'Creating...' : 'Create Dataset'"
-                :loading="creatingDataset"
-                :disabled="creatingDataset"
-                @click="createDataset"
-              />
-            </div>
-
-            <ul class="dataset-list">
-              <li
-                v-for="ds in datasets"
-                :key="ds.id"
-                class="dataset-item"
-                @click="selectDataset(ds.id)"
-              >
-                <div class="dataset-name">{{ ds.name }}</div>
-                <div class="dataset-meta">
-                  {{ ds.file_count }} files
-                </div>
-              </li>
-            </ul>
-          </div>
-        </template>
-      </Card>
-
-      <Card class="panel-card">
-        <template #title>Dataset Details</template>
-        <template #content>
-          <div class="panel-content">
-            <p v-if="loadingDatasetDetail">Dataset-Details werden geladen ...</p>
-
-            <div v-else-if="selectedFile" class="file-detail">
-              <Button
-                class="secondary-button small-button"
-                label="← Back to dataset"
-                @click="selectedFile = null; fileDetailTrace = null; fileAcfTrace = null"
-              />
-              <div class="file-detail-grid">
-                <div class="file-detail-main-column">
-                  <Card class="sub-card">
-                    <template #title>File Info</template>
-                    <template #content>
-                      <div class="panel-content">
-                        <h3>{{ selectedFile.filename }}</h3>
-                        <p class="file-meta">{{ selectedFile.object_key }}</p>
-
-                        <div class="file-tags" v-if="selectedFile.tags?.length">
-                          <span
-                            v-for="tag in selectedFile.tags"
-                            :key="tag.id"
-                            class="tag-pill removable-tag"
-                            @click="removeTagFromFile(selectedFile, tag)"
-                            title="Remove tag"
-                          >
-                            {{ tag.name }} ×
-                          </span>
-                        </div>
-
-                        <div class="tag-input-row">
-                          <InputText
-                            v-model="newTagName"
-                            placeholder="Add tag"
-                            class="text-input"
-                            @keyup.enter="addTagToFile(selectedFile)"
-                          />
-                          <Button
-                            class="secondary-button small-button"
-                            label="Add tag"
-                            @click="addTagToFile(selectedFile)"
-                          />
-                        </div>
-                      </div>
-                    </template>
-                  </Card>
-
-                  <Card class="sub-card file-analysis-card">
-                    <template #title>Analysis</template>
-                    <template #content>
-                      <div class="panel-content">
-                        <div class="detail-view-toggle">
-                          <Button
-                            class="secondary-button small-button"
-                            :class="{'active-toggle': selectedDetailView === 'trace' }"
-                            label="Trace"
-                            @click="switchDetailView('trace')"
-                          />
-
-                          <Button
-                            class="secondary-button small-button"
-                            :class="{'active-toggle': selectedDetailView === 'acf' }"
-                            label="ACF"
-                            @click="switchDetailView('acf')"
-                          />
-                        </div>
-
-                        <div v-if="selectedDetailView === 'trace'" class="detail-controls">
-                          <label for="bin-width-select">Bin width:</label>
-                          <Select
-                            id="bin-width-select"
-                            v-model="selectedDetailBinWidthMs"
-                            :options="detailBinWidthOptions"
-                            optionLabel="label"
-                            optionValue="value"
-                            class="text-input"
-                            @change="loadFileDetailTrace(selectedFile.id)"
-                          />
-                        </div>
-
-                        <div v-if="selectedDetailView === 'acf'" class="detail-controls detail-controls-grid">
-                          <label>
-                            Bins/dec
-                            <input v-model.number="acfBinsPerDec" type="number" min="1" class="text-input" />
-                          </label>
-
-                          <label>
-                            Lag min exp
-                            <input v-model.number="acfLagMinExp" type="number" class="text-input" />
-                          </label>
-
-                          <label>
-                            Lag max exp
-                            <input v-model.number="acfLagMaxExp" type="number" class="text-input" />
-                          </label>
-
-                          <label>
-                            Cut points
-                            <input v-model.number="acfCutPoints" type="number" min="0" class="text-input" />
-                          </label>
-
-                          <label>
-                            τ min (µs)
-                            <input v-model.number="acfTauMinUs" type="number" min="0" step="0.1" class="text-input" />
-                          </label>
-
-                          <label>
-                            τ max (µs, 0 = none)
-                            <input v-model.number="acfTauMaxUs" type="number" min="0" step="0.1" class="text-input" />
-                          </label>
-
-                          <Button
-                            class="secondary-button small-button"
-                            :label="loadingFileAcfTrace ? 'Loading...' : 'Update ACF'"
-                            :loading="loadingFileAcfTrace"
-                            :disabled="loadingFileAcfTrace"
-                            @click="loadFileAcfTrace(selectedFile.id)"
-                          />
-                        </div>
-
-                        <TracePreview
-                          v-if="selectedDetailView === 'trace' && fileDetailTrace"
-                          :preview="fileDetailTrace"
-                          variant="detail"
-                        />
-
-                        <TracePreview
-                          v-else-if="selectedDetailView === 'acf' && fileAcfTrace"
-                          :preview="fileAcfTrace"
-                          variant="detail"
-                        />
-
-                        <p v-else-if="selectedDetailView === 'trace' && loadingFileDetailTrace" class="empty-state">
-                          Lade Detail-Trace ...
-                        </p>
-
-                        <p v-else-if="selectedDetailView === 'acf' && loadingFileAcfTrace" class="empty-state">
-                          Lade ACF/CCF ...
-                        </p>
-
-                        <p v-else class="empty-state">Keine Daten für diese Ansicht vorhanden.</p>
-                      </div>
-                    </template>
-                  </Card>
-                </div>
-
-                <Card class="sub-card file-metadata-card">
-                  <template #title>Notes & Metadata</template>
-                  <template #content>
-                    <div class="panel-content">
-                      <div class="file-notes-section">
-                        <label class="notes-label" for="file-notes-textarea">File notes</label>
-                        <Textarea
-                          id="file-notes-textarea"
-                          v-model="fileNotesDraft"
-                          class="text-input textarea-input"
-                          placeholder="Add notes for this file"
-                        />
-
-                        <div class="file-metadata-grid">
-                          <label>
-                            Measurement date
-                            <input
-                              v-model="fileMeasurementDateDraft"
-                              type="datetime-local"
-                              class="text-input"
-                            />
-                          </label>
-
-                          <label>
-                            Excitation power (µW)
-                            <input
-                              v-model="fileExcitationPowerDraft"
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              class="text-input"
-                              placeholder="e.g. 5"
-                            />
-                          </label>
-
-                          <label>
-                            Objective
-                            <input
-                              v-model="fileObjectiveDraft"
-                              type="text"
-                              class="text-input"
-                              placeholder="e.g. Plan Apo"
-                            />
-                          </label>
-                        </div>
-
-                        <Button
-                          class="secondary-button small-button save-notes-button"
-                          :label="savingFileNotes ? 'Saving...' : 'Save notes'"
-                          :loading="savingFileNotes"
-                          :disabled="savingFileNotes"
-                          @click="saveFileNotes"
-                        />
-                      </div>
-                    </div>
-                  </template>
-                </Card>
-              </div>
-            </div>
-
-            <div v-else-if="selectedDataset">
-              <div class="edit-dataset-form">
-                <InputText
-                  v-model="editDatasetName"
-                  class="text-input"
-                  placeholder="Dataset name"
-                />
-
-                <Textarea
-                  v-model="editDatasetDescription"
-                  class="text-input textarea-input"
-                  placeholder="Description"
-                />
-                <Textarea
-                  v-model="editDatasetNotes"
-                  class="text-input textarea-input"
-                  placeholder="Dataset notes"
-                />
-
-                <Button
-                  class="primary-button"
-                  :label="savingDataset ? 'Saving...' : 'Save changes'"
-                  :loading="savingDataset"
-                  :disabled="savingDataset"
-                  @click="updateDataset"
-                />
-              </div>
-
-              <Button
-                class="danger-button small-button"
-                label="Delete Dataset"
-                @click="deleteDataset(selectedDataset.id)"
-              />
-
-
-              <h4>Files</h4>
-
-              <div class="upload-section">
-                <input
-                  id="dataset-file-upload"
-                  class="hidden-file-input"
-                  type="file"
-                  multiple
-                  @change="handleFileUpload"
-                />
-
-                <Button
-                  class="primary-button small-button"
-                  :label="uploadingFiles ? 'Uploading...' : 'Upload file(s)'"
-                  :loading="uploadingFiles"
-                  :disabled="uploadingFiles"
-                  @click="openFilePicker"
-                />
-                <div v-if="uploadingFiles" class="upload-progress">
-                  <div class="upload-progress-text">{{ uploadProgressText }}</div>
-                  <div class="upload-progress-bar">
-                    <div
-                      class="upload-progress-bar-fill"
-                      :style="{ width: `${uploadProgressPercent}%` }"
-                    ></div>
-                  </div>
-                  <div class="upload-progress-percent">{{ uploadProgressPercent }}%</div>
-                </div>
-              </div>
-
-              <div v-if="uploadMetadataSuggestions.length > 0" class="upload-detection-panel">
-                <div class="upload-detection-header">
-                  <strong>Detected metadata for uploaded files</strong>
-                  <div class="upload-detection-actions">
-                    <Button
-                      class="secondary-button small-button"
-                      :label="applyingUploadMetadata ? 'Applying...' : 'Apply detected metadata'"
-                      :loading="applyingUploadMetadata"
-                      :disabled="applyingUploadMetadata"
-                      @click="applyUploadMetadataSuggestions"
-                    />
-                    <Button
-                      class="secondary-button small-button"
-                      label="Dismiss"
-                      :disabled="applyingUploadMetadata"
-                      @click="uploadMetadataSuggestions = []"
-                    />
-                  </div>
-                </div>
-
-                <ul class="upload-detection-list">
-                  <li
-                    v-for="suggestion in uploadMetadataSuggestions"
-                    :key="suggestion.fileId"
-                    class="upload-detection-item"
-                  >
-                    <div class="upload-detection-filename">{{ suggestion.filename }}</div>
-                    <div class="upload-detection-meta">
-                      <span v-if="suggestion.measurement_date">
-                        Date: {{ suggestion.measurement_date }}
-                      </span>
-                      <span v-if="suggestion.excitation_power != null">
-                        Power: {{ suggestion.excitation_power }} µW
-                      </span>
-                    </div>
-                  </li>
-                </ul>
-              </div>
-
-              <div v-if="selectedDataset.files.length > 0" class="file-actions-bar">
-                <label class="select-all-row">
-                  <input
-                    type="checkbox"
-                    :checked="selectedFileIds.length === selectedDataset.files.length"
-                    @change="toggleSelectAllFiles"
-                  />
-                  <span>Select all</span>
-                </label>
-
-                <div class="bulk-actions-panel">
-                  <div class="bulk-actions-group">
-                    <Select
-                      v-model="moveTargetDatasetId"
-                      :options="moveTargetDatasetOptions"
-                      optionLabel="label"
-                      optionValue="value"
-                      placeholder="Move to dataset..."
-                      class="text-input move-select"
-                    />
-
-                    <Button
-                      class="secondary-button small-button"
-                      :label="movingSelectedFiles ? 'Moving...' : 'Move selected'"
-                      :loading="movingSelectedFiles"
-                      :disabled="selectedFileIds.length === 0 || !moveTargetDatasetId || movingSelectedFiles"
-                      @click="moveSelectedFiles"
-                    />
-
-                    <Button
-                      class="secondary-button small-button"
-                      label="Copy selected"
-                      :disabled="selectedFileIds.length === 0 || !moveTargetDatasetId"
-                      @click="copySelectedFiles"
-                    />
-
-                    <Button
-                      class="danger-button small-button"
-                      :label="deletingSelectedFiles ? 'Deleting...' : 'Delete selected'"
-                      :loading="deletingSelectedFiles"
-                      :disabled="selectedFileIds.length === 0 || deletingSelectedFiles"
-                      @click="deleteSelectedFiles"
-                    />
-                  </div>
-
-                  <div class="bulk-metadata-panel">
-                    <input
-                      v-model="bulkMeasurementDateDraft"
-                      type="datetime-local"
-                      class="text-input"
-                      placeholder="Measurement date"
-                    />
-
-                    <input
-                      v-model="bulkExcitationPowerDraft"
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      class="text-input"
-                      placeholder="Power (µW)"
-                    />
-
-                    <input
-                      v-model="bulkObjectiveDraft"
-                      type="text"
-                      class="text-input"
-                      placeholder="Objective"
-                    />
-
-                    <Button
-                      class="secondary-button small-button"
-                      :label="savingBulkMetadata ? 'Saving...' : 'Set metadata'"
-                      :loading="savingBulkMetadata"
-                      :disabled="selectedFileIds.length === 0 || savingBulkMetadata"
-                      @click="updateSelectedMetadata"
-                    />
-                  </div>
-
-                  <div class="selected-files-info">
-                    {{ selectedFileIds.length }} file(s) selected
-                  </div>
-                </div>
-              </div>
-
-              <ul class="file-list">
-                <li
-                  v-for="file in selectedDataset.files"
-                  :key="file.id"
-                  class="file-item clickable-file"
-                  @click="openFileDetail(file)"
-                >
-                  <div class="file-top-row">
-                    <label class="file-checkbox-row">
-                      <input
-                        type="checkbox"
-                        :checked="isFileSelected(file.id)"
-                        @click.stop
-                        @change="toggleFileSelection(file.id)"
-                      />
-                      <span class="file-name">{{ file.filename }}</span>
-                    </label>
-                  </div>
-
-                  <div class="file-meta">{{ file.object_key }}</div>
-
-                  <div class="file-tags-inline" v-if="file.tags?.length">
-                    <span
-                      v-for="tag in file.tags"
-                      :key="tag.id"
-                      class="tag-pill"
-                    >
-                      {{ tag.name }}
-                    </span>
-                  </div>
-
-                  <div class="preview-stack">
-                    <div class="preview-block">
-                      <div class="preview-label">Trace</div>
-                      <TracePreview
-                        v-if="file.tracePreview"
-                        :preview="file.tracePreview.preview_data"
-                        variant="thumb"
-                      />
-                    </div>
-
-                    <div class="preview-block preview-block--acf">
-                      <div class="preview-label">ACF</div>
-                      <TracePreview
-                        v-if="file.acfPreview"
-                        :preview="file.acfPreview.preview_data"
-                        variant="thumb"
-                      />
-                    </div>
-                  </div>
-
-                  <div class="file-button-row">
-                    <Button
-                      class="download-button small-button"
-                      label="Download"
-                      @click.stop="downloadFile(file.id)"
-                    />
-                    <Button
-                      class="danger-button small-button"
-                      label="Delete"
-                      @click.stop="deleteFile(file.id)"
-                    />
-                  </div>
-                </li>
-              </ul>
-
-              <p v-if="selectedDataset.files.length === 0" class="empty-state">
-                Dieses Dataset enthält noch keine Files.
-              </p>
-            </div>
-
-            <p v-else class="empty-state">Wähle links ein Dataset aus.</p>
-          </div>
-        </template>
-      </Card>
+      <DatasetDetailPanel
+        v-else
+        :loading-dataset-detail="loadingDatasetDetail"
+        :selected-dataset="selectedDataset"
+        :edit-dataset-name="editDatasetName"
+        :edit-dataset-description="editDatasetDescription"
+        :edit-dataset-notes="editDatasetNotes"
+        :saving-dataset="savingDataset"
+        :uploading-files="uploadingFiles"
+        :upload-progress-text="uploadProgressText"
+        :upload-progress-percent="uploadProgressPercent"
+        :upload-metadata-suggestions="uploadMetadataSuggestions"
+        :applying-upload-metadata="applyingUploadMetadata"
+        :selected-file-ids="selectedFileIds"
+        :move-target-dataset-id="moveTargetDatasetId"
+        :move-target-dataset-options="moveTargetDatasetOptions"
+        :moving-selected-files="movingSelectedFiles"
+        :deleting-selected-files="deletingSelectedFiles"
+        :bulk-measurement-date-draft="bulkMeasurementDateDraft"
+        :bulk-excitation-power-draft="bulkExcitationPowerDraft"
+        :bulk-objective-draft="bulkObjectiveDraft"
+        :saving-bulk-metadata="savingBulkMetadata"
+        @update:edit-dataset-name="editDatasetName = $event"
+        @update:edit-dataset-description="editDatasetDescription = $event"
+        @update:edit-dataset-notes="editDatasetNotes = $event"
+        @update:moveTargetDatasetId="moveTargetDatasetId = $event"
+        @update:bulkMeasurementDateDraft="bulkMeasurementDateDraft = $event"
+        @update:bulkExcitationPowerDraft="bulkExcitationPowerDraft = $event"
+        @update:bulkObjectiveDraft="bulkObjectiveDraft = $event"
+        @update-dataset="updateDataset"
+        @delete-dataset="deleteDataset"
+        @open-file-picker="openFilePicker"
+        @apply-upload-metadata-suggestions="applyUploadMetadataSuggestions"
+        @dismiss-upload-metadata-suggestions="uploadMetadataSuggestions = []"
+        @toggle-select-all-files="toggleSelectAllFiles"
+        @move-selected-files="moveSelectedFiles"
+        @copy-selected-files="copySelectedFiles"
+        @delete-selected-files="deleteSelectedFiles"
+        @update-selected-metadata="updateSelectedMetadata"
+        @open-file-detail="openFileDetail"
+        @toggle-file-selection="toggleFileSelection"
+        @download-file="downloadFile"
+        @delete-file="deleteFile"
+      />
     </div>
   </div>
-
 </template>
 
 
 <style scoped>
 .page {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 1.5rem 2rem;
   font-family: Arial, sans-serif;
   background: #f6f7fb;
   min-height: 100vh;
   color: #222;
+  box-sizing: border-box;
 }
 
 h1 {
@@ -1407,9 +996,18 @@ h4 {
 
 .layout {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 340px minmax(0, 1fr);
   gap: 1.5rem;
   align-items: start;
+  width: 100%;
+}
+
+.layout--file-selected {
+  grid-template-columns: 300px minmax(0, 1.5fr) minmax(420px, 0.95fr);
+}
+
+.panel-card--side-detail {
+  min-width: 0;
 }
 
 .panel-card {
@@ -1745,12 +1343,6 @@ h4 {
   gap: 1rem;
 }
 
-.file-detail-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.75fr);
-  gap: 1rem;
-  align-items: start;
-}
 
 .file-detail-main-column {
   display: flex;
@@ -1759,10 +1351,6 @@ h4 {
   min-width: 0;
 }
 
-.file-metadata-card {
-  position: sticky;
-  top: 1rem;
-}
 
 .sub-card {
   border-radius: 14px;
@@ -1929,11 +1517,9 @@ h4 {
 }
 
 @media (max-width: 900px) {
-  .file-detail-grid {
+  .layout,
+  .layout--file-selected {
     grid-template-columns: 1fr;
-  }
-  .file-metadata-card {
-    position: static;
   }
 }
 </style>
