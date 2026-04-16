@@ -3,16 +3,18 @@
   import { ref, onMounted, computed } from "vue"
   import axios from "axios"
 
-  import DatasetSidebar from "./components/DatasetSidebar.vue"
   import DatasetDetailPanel from "./components/DatasetDetailPanel.vue"
   import FileDetailPanel from "./components/FileDetailPanel.vue"
-  import TracePreview from "./components/TracePreview.vue"
 
   import Button from 'primevue/button'
+  import Breadcrumb from 'primevue/breadcrumb'
   import Card from 'primevue/card'
-  import InputText from 'primevue/inputtext'
-  import Textarea from 'primevue/textarea'
-  import Select from 'primevue/select'
+  import Divider from 'primevue/divider'
+  import Message from "primevue/message"
+  import PanelMenu from "primevue/panelmenu"
+  import ProgressSpinner from 'primevue/progressspinner'
+  import Tag from 'primevue/tag'
+  import Toolbar from "primevue/toolbar"
 
 
 
@@ -61,6 +63,7 @@
   const acfTauMinUs = ref(5)
   const acfTauMaxUs = ref(0)
   const newTagName = ref("")
+  const sidebarCollapsed = ref(false)
 
   const detailBinWidthOptions = [
     { label: '1 ms', value: 1 },
@@ -80,6 +83,64 @@
         value: ds.id,
       }))
   })
+
+  const selectedDatasetFileCount = computed(() => selectedDataset.value?.files?.length || 0)
+
+  const breadcrumbItems = computed(() => {
+    const items = [
+      {
+        label: "Datasets",
+        icon: "pi pi-database",
+        command: () => {
+          selectedFile.value = null
+        },
+      },
+    ]
+
+    if (selectedDataset.value) {
+      items.push({
+        label: selectedDataset.value.name,
+        icon: "pi pi-folder-open",
+        command: () => {
+          selectedFile.value = null
+        },
+      })
+    }
+
+    if (selectedFile.value) {
+      items.push({
+        label: selectedFile.value.filename,
+        icon: "pi pi-file",
+      })
+    }
+
+    return items
+  })
+
+  const workspaceTitle = computed(() => {
+    if (selectedFile.value) return selectedFile.value.filename
+    if (selectedDataset.value) return selectedDataset.value.name
+    return "Photon Data Hub"
+  })
+
+  const workspaceSubtitle = computed(() => {
+    if (selectedFile.value) return selectedDataset.value?.name || "Selected dataset"
+    if (selectedDataset.value) return selectedDataset.value.description || "No description available."
+    return "Choose a dataset from the navigation."
+  })
+
+  const menuItems = computed(() => [
+  {
+    label: "Datasets",
+    icon: "pi pi-database",
+    items: datasets.value.map((ds) => ({
+      label: ds.name,
+      icon: selectedDataset.value?.id === ds.id ? "pi pi-folder-open" : "pi pi-folder",
+      command: () => selectDataset(ds.id),
+    })),
+  },
+])
+
 async function loadFileTags(fileId) {
   try {
     const response = await axios.get(`http://localhost:8000/files/${fileId}/tags`)
@@ -283,9 +344,12 @@ function sortDatasetFiles(files) {
   } finally {
     loadingDatasetDetail.value = false
   }
-  editDatasetName.value = selectedDataset.value.name
-  editDatasetDescription.value = selectedDataset.value.description
-  editDatasetNotes.value = selectedDataset.value.notes || ""
+
+  if (selectedDataset.value) {
+    editDatasetName.value = selectedDataset.value.name
+    editDatasetDescription.value = selectedDataset.value.description
+    editDatasetNotes.value = selectedDataset.value.notes || ""
+  }
 }
 
   onMounted(async () => {
@@ -754,6 +818,12 @@ async function openFileDetail(file) {
   await loadFileDetailTrace(file.id)
 }
 
+function closeFileDetail() {
+  selectedFile.value = null
+  fileDetailTrace.value = null
+  fileAcfTrace.value = null
+}
+
 async function saveFileNotes() {
   if (!selectedFile.value) return
 
@@ -845,681 +915,526 @@ async function loadFileAcfTrace(fileId) {
 </script>
 
 
-// --------------------------------------------------------------------------------
-// -------------------------------- TEMPLATE --------------------------------------
-// --------------------------------------------------------------------------------
-
-
 <template>
-  <div class="page">
-    <h1>Photon Data Hub</h1>
-
-    <div class="layout" :class="{ 'layout--file-selected': selectedFile }">
-      <DatasetSidebar
-        :datasets="datasets"
-        :loading-datasets="loadingDatasets"
-        :error-message="errorMessage"
-        :new-dataset-name="newDatasetName"
-        :new-dataset-description="newDatasetDescription"
-        :creating-dataset="creatingDataset"
-        @update:new-dataset-name="newDatasetName = $event"
-        @update:new-dataset-description="newDatasetDescription = $event"
-        @create-dataset="createDataset"
-        @select-dataset="selectDataset"
-      />
-
-      <template v-if="selectedFile">
-        <FileDetailPanel
-          :selected-file="selectedFile"
-          :new-tag-name="newTagName"
-          :file-notes-draft="fileNotesDraft"
-          :file-measurement-date-draft="fileMeasurementDateDraft"
-          :file-excitation-power-draft="fileExcitationPowerDraft"
-          :file-objective-draft="fileObjectiveDraft"
-          :saving-file-notes="savingFileNotes"
-          :selected-detail-view="selectedDetailView"
-          :selected-detail-bin-width-ms="selectedDetailBinWidthMs"
-          :detail-bin-width-options="detailBinWidthOptions"
-          :file-detail-trace="fileDetailTrace"
-          :file-acf-trace="fileAcfTrace"
-          :loading-file-detail-trace="loadingFileDetailTrace"
-          :loading-file-acf-trace="loadingFileAcfTrace"
-          :acf-bins-per-dec="acfBinsPerDec"
-          :acf-lag-min-exp="acfLagMinExp"
-          :acf-lag-max-exp="acfLagMaxExp"
-          :acf-cut-points="acfCutPoints"
-          :acf-tau-min-us="acfTauMinUs"
-          :acf-tau-max-us="acfTauMaxUs"
-          @back="selectedFile = null; fileDetailTrace = null; fileAcfTrace = null"
-          @update:new-tag-name="newTagName = $event"
-          @add-tag="addTagToFile"
-          @remove-tag="removeTagFromFile"
-          @update:file-notes-draft="fileNotesDraft = $event"
-          @update:file-measurement-date-draft="fileMeasurementDateDraft = $event"
-          @update:file-excitation-power-draft="fileExcitationPowerDraft = $event"
-          @update:file-objective-draft="fileObjectiveDraft = $event"
-          @save-notes="saveFileNotes"
-          @switch-detail-view="switchDetailView"
-          @update:selected-detail-bin-width-ms="selectedDetailBinWidthMs = $event"
-          @load-detail-trace="loadFileDetailTrace"
-          @load-acf-trace="loadFileAcfTrace"
-          @update:acf-bins-per-dec="acfBinsPerDec = $event"
-          @update:acf-lag-min-exp="acfLagMinExp = $event"
-          @update:acf-lag-max-exp="acfLagMaxExp = $event"
-          @update:acf-cut-points="acfCutPoints = $event"
-          @update:acf-tau-min-us="acfTauMinUs = $event"
-          @update:acf-tau-max-us="acfTauMaxUs = $event"
+  <div
+    class="app-shell"
+    :class="{ 'app-shell--sidebar-collapsed': sidebarCollapsed }"
+  >
+    <aside class="app-sidebar">
+      <div class="brand-block">
+        <div class="brand-icon-wrap">
+          <i class="pi pi-sparkles brand-icon"></i>
+        </div>
+        <div v-if="!sidebarCollapsed" class="brand-copy">
+          <div class="brand-title">Photon Data Hub</div>
+          <div class="brand-subtitle">TCSPC Platform</div>
+        </div>
+        <Button
+          class="sidebar-toggle"
+          :icon="sidebarCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'"
+          severity="secondary"
+          variant="text"
+          rounded
+          :aria-label="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+          @click="sidebarCollapsed = !sidebarCollapsed"
         />
-      </template>
+      </div>
 
-      <DatasetDetailPanel
-        v-else
-        :loading-dataset-detail="loadingDatasetDetail"
-        :selected-dataset="selectedDataset"
-        :edit-dataset-name="editDatasetName"
-        :edit-dataset-description="editDatasetDescription"
-        :edit-dataset-notes="editDatasetNotes"
-        :saving-dataset="savingDataset"
-        :uploading-files="uploadingFiles"
-        :upload-progress-text="uploadProgressText"
-        :upload-progress-percent="uploadProgressPercent"
-        :upload-metadata-suggestions="uploadMetadataSuggestions"
-        :applying-upload-metadata="applyingUploadMetadata"
-        :selected-file-ids="selectedFileIds"
-        :move-target-dataset-id="moveTargetDatasetId"
-        :move-target-dataset-options="moveTargetDatasetOptions"
-        :moving-selected-files="movingSelectedFiles"
-        :deleting-selected-files="deletingSelectedFiles"
-        :bulk-measurement-date-draft="bulkMeasurementDateDraft"
-        :bulk-excitation-power-draft="bulkExcitationPowerDraft"
-        :bulk-objective-draft="bulkObjectiveDraft"
-        :saving-bulk-metadata="savingBulkMetadata"
-        @update:edit-dataset-name="editDatasetName = $event"
-        @update:edit-dataset-description="editDatasetDescription = $event"
-        @update:edit-dataset-notes="editDatasetNotes = $event"
-        @update:moveTargetDatasetId="moveTargetDatasetId = $event"
-        @update:bulkMeasurementDateDraft="bulkMeasurementDateDraft = $event"
-        @update:bulkExcitationPowerDraft="bulkExcitationPowerDraft = $event"
-        @update:bulkObjectiveDraft="bulkObjectiveDraft = $event"
-        @update-dataset="updateDataset"
-        @delete-dataset="deleteDataset"
-        @open-file-picker="openFilePicker"
-        @apply-upload-metadata-suggestions="applyUploadMetadataSuggestions"
-        @dismiss-upload-metadata-suggestions="uploadMetadataSuggestions = []"
-        @toggle-select-all-files="toggleSelectAllFiles"
-        @move-selected-files="moveSelectedFiles"
-        @copy-selected-files="copySelectedFiles"
-        @delete-selected-files="deleteSelectedFiles"
-        @update-selected-metadata="updateSelectedMetadata"
-        @open-file-detail="openFileDetail"
-        @toggle-file-selection="toggleFileSelection"
-        @download-file="downloadFile"
-        @delete-file="deleteFile"
-      />
-    </div>
+      <Divider v-if="!sidebarCollapsed" class="sidebar-divider" />
+
+      <Card v-if="!sidebarCollapsed" class="sidebar-card">
+        <template #title>
+          <div class="card-title-row">
+            <span>Navigation</span>
+            <Tag :value="datasets.length" severity="info" rounded />
+          </div>
+        </template>
+        <template #content>
+          <ProgressSpinner
+            v-if="loadingDatasets"
+            class="sidebar-spinner"
+            stroke-width="4"
+            aria-label="Loading datasets"
+          />
+          <PanelMenu v-else :model="menuItems" class="dataset-menu" />
+        </template>
+      </Card>
+
+      <Card v-if="!sidebarCollapsed" class="sidebar-card sidebar-info-card">
+        <template #title>Workspace</template>
+        <template #content>
+          <div class="sidebar-meta-list">
+            <Tag
+              :value="selectedDataset ? `${selectedDatasetFileCount} files` : 'No dataset selected'"
+              :severity="selectedDataset ? 'success' : 'secondary'"
+              rounded
+            />
+            <span v-if="selectedDataset" class="sidebar-selected-name">
+              {{ selectedDataset.name }}
+            </span>
+          </div>
+        </template>
+      </Card>
+
+      <div v-else class="sidebar-rail">
+        <Button
+          icon="pi pi-database"
+          severity="secondary"
+          variant="text"
+          rounded
+          :title="`${datasets.length} datasets`"
+          @click="sidebarCollapsed = false"
+        />
+        <Button
+          v-if="selectedDataset"
+          icon="pi pi-folder-open"
+          severity="secondary"
+          variant="text"
+          rounded
+          :title="selectedDataset.name"
+          @click="sidebarCollapsed = false"
+        />
+      </div>
+    </aside>
+
+    <main class="app-main">
+      <Toolbar class="main-toolbar">
+        <template #start>
+          <Breadcrumb :model="breadcrumbItems" class="app-breadcrumb" />
+        </template>
+
+        <template #end>
+          <Tag
+            v-if="selectedDataset"
+            :value="`${selectedDatasetFileCount} files`"
+            severity="secondary"
+            rounded
+          />
+          <Button
+            label="Reload"
+            icon="pi pi-refresh"
+            variant="outlined"
+            :loading="loadingDatasets || loadingDatasetDetail"
+            @click="selectedDataset ? selectDataset(selectedDataset.id) : loadDatasets()"
+          />
+        </template>
+      </Toolbar>
+
+      <Message v-if="errorMessage" severity="error" class="app-message" closable>
+        {{ errorMessage }}
+      </Message>
+
+      <Card class="workspace-shell">
+        <template #title>
+          <div class="workspace-header">
+            <div class="workspace-heading">
+              <h1 class="workspace-title">{{ workspaceTitle }}</h1>
+              <p class="workspace-subtitle">{{ workspaceSubtitle }}</p>
+            </div>
+
+            <Button
+              v-if="selectedFile"
+              label="Back to dataset"
+              icon="pi pi-arrow-left"
+              variant="outlined"
+              @click="closeFileDetail"
+            />
+          </div>
+        </template>
+
+        <template #content>
+          <div v-if="!selectedDataset" class="empty-state-content">
+            <i class="pi pi-database empty-icon"></i>
+            <h2>Select a dataset</h2>
+            <p>Choose a dataset from the navigation to view files and metadata.</p>
+          </div>
+
+          <div v-else-if="selectedFile" class="workspace-body workspace-body--file">
+            <FileDetailPanel
+              :selected-file="selectedFile"
+              :new-tag-name="newTagName"
+              :file-notes-draft="fileNotesDraft"
+              :file-measurement-date-draft="fileMeasurementDateDraft"
+              :file-excitation-power-draft="fileExcitationPowerDraft"
+              :file-objective-draft="fileObjectiveDraft"
+              :saving-file-notes="savingFileNotes"
+              :selected-detail-view="selectedDetailView"
+              :selected-detail-bin-width-ms="selectedDetailBinWidthMs"
+              :detail-bin-width-options="detailBinWidthOptions"
+              :file-detail-trace="fileDetailTrace"
+              :file-acf-trace="fileAcfTrace"
+              :loading-file-detail-trace="loadingFileDetailTrace"
+              :loading-file-acf-trace="loadingFileAcfTrace"
+              :acf-bins-per-dec="acfBinsPerDec"
+              :acf-lag-min-exp="acfLagMinExp"
+              :acf-lag-max-exp="acfLagMaxExp"
+              :acf-cut-points="acfCutPoints"
+              :acf-tau-min-us="acfTauMinUs"
+              :acf-tau-max-us="acfTauMaxUs"
+              @back="closeFileDetail"
+              @update:new-tag-name="newTagName = $event"
+              @add-tag="addTagToFile"
+              @remove-tag="removeTagFromFile"
+              @update:file-notes-draft="fileNotesDraft = $event"
+              @update:file-measurement-date-draft="fileMeasurementDateDraft = $event"
+              @update:file-excitation-power-draft="fileExcitationPowerDraft = $event"
+              @update:file-objective-draft="fileObjectiveDraft = $event"
+              @save-notes="saveFileNotes"
+              @switch-detail-view="switchDetailView"
+              @update:selected-detail-bin-width-ms="selectedDetailBinWidthMs = $event"
+              @load-detail-trace="loadFileDetailTrace"
+              @load-acf-trace="loadFileAcfTrace"
+              @update:acf-bins-per-dec="acfBinsPerDec = $event"
+              @update:acf-lag-min-exp="acfLagMinExp = $event"
+              @update:acf-lag-max-exp="acfLagMaxExp = $event"
+              @update:acf-cut-points="acfCutPoints = $event"
+              @update:acf-tau-min-us="acfTauMinUs = $event"
+              @update:acf-tau-max-us="acfTauMaxUs = $event"
+            />
+          </div>
+
+          <div v-else class="workspace-body">
+            <DatasetDetailPanel
+              :loading-dataset-detail="loadingDatasetDetail"
+              :selected-dataset="selectedDataset"
+              :edit-dataset-name="editDatasetName"
+              :edit-dataset-description="editDatasetDescription"
+              :edit-dataset-notes="editDatasetNotes"
+              :saving-dataset="savingDataset"
+              :uploading-files="uploadingFiles"
+              :upload-progress-text="uploadProgressText"
+              :upload-progress-percent="uploadProgressPercent"
+              :upload-metadata-suggestions="uploadMetadataSuggestions"
+              :applying-upload-metadata="applyingUploadMetadata"
+              :selected-file-ids="selectedFileIds"
+              :move-target-dataset-id="moveTargetDatasetId"
+              :move-target-dataset-options="moveTargetDatasetOptions"
+              :moving-selected-files="movingSelectedFiles"
+              :deleting-selected-files="deletingSelectedFiles"
+              :bulk-measurement-date-draft="bulkMeasurementDateDraft"
+              :bulk-excitation-power-draft="bulkExcitationPowerDraft"
+              :bulk-objective-draft="bulkObjectiveDraft"
+              :saving-bulk-metadata="savingBulkMetadata"
+              @update:edit-dataset-name="editDatasetName = $event"
+              @update:edit-dataset-description="editDatasetDescription = $event"
+              @update:edit-dataset-notes="editDatasetNotes = $event"
+              @update:moveTargetDatasetId="moveTargetDatasetId = $event"
+              @update:bulkMeasurementDateDraft="bulkMeasurementDateDraft = $event"
+              @update:bulkExcitationPowerDraft="bulkExcitationPowerDraft = $event"
+              @update:bulkObjectiveDraft="bulkObjectiveDraft = $event"
+              @update-dataset="updateDataset"
+              @delete-dataset="deleteDataset"
+              @open-file-picker="openFilePicker"
+              @handle-file-upload="handleFileUpload"
+              @apply-upload-metadata-suggestions="applyUploadMetadataSuggestions"
+              @dismiss-upload-metadata-suggestions="uploadMetadataSuggestions = []"
+              @toggle-select-all-files="toggleSelectAllFiles"
+              @move-selected-files="moveSelectedFiles"
+              @copy-selected-files="copySelectedFiles"
+              @delete-selected-files="deleteSelectedFiles"
+              @update-selected-metadata="updateSelectedMetadata"
+              @open-file-detail="openFileDetail"
+              @toggle-file-selection="toggleFileSelection"
+              @download-file="downloadFile"
+              @delete-file="deleteFile"
+            />
+          </div>
+        </template>
+      </Card>
+    </main>
   </div>
 </template>
 
 
 <style scoped>
-.page {
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 1.5rem 2rem;
-  font-family: Arial, sans-serif;
-  background: #f6f7fb;
+.app-shell {
   min-height: 100vh;
-  color: #222;
-  box-sizing: border-box;
-}
-
-h1 {
-  margin-bottom: 1.5rem;
-  font-size: 2rem;
-}
-
-h2 {
-  margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 1.2rem;
-}
-
-h3 {
-  margin-bottom: 0.5rem;
-}
-
-h4 {
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.layout {
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
-  gap: 1.5rem;
-  align-items: start;
-  width: 100%;
+  grid-template-columns: 320px minmax(0, 1fr);
+  background: var(--p-surface-100);
+  color: var(--p-text-color);
+  transition: grid-template-columns 0.18s ease;
 }
 
-.layout--file-selected {
-  grid-template-columns: 300px minmax(0, 1.5fr) minmax(420px, 0.95fr);
+.app-shell--sidebar-collapsed {
+  grid-template-columns: 76px minmax(0, 1fr);
 }
 
-.panel-card--side-detail {
+.app-sidebar {
+  background: var(--p-surface-0);
+  color: var(--p-text-color);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-right: 1px solid var(--p-surface-200);
   min-width: 0;
 }
 
-.panel-card {
-  border-radius: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+.app-shell--sidebar-collapsed .app-sidebar {
+  padding: 0.75rem 0.5rem;
+  align-items: center;
 }
 
-.panel-content {
+.brand-block {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.1rem 0 0.25rem;
 }
 
-.dataset-list,
-.file-list {
-  list-style: none;
-  padding: 0;
+.app-shell--sidebar-collapsed .brand-block {
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.brand-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.brand-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--p-primary-50);
+  border: 1px solid var(--p-primary-100);
+  flex: 0 0 auto;
+}
+
+.brand-icon {
+  font-size: 1.25rem;
+  color: var(--p-primary-color);
+}
+
+.brand-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--p-text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand-subtitle {
+  font-size: 0.82rem;
+  color: var(--p-text-muted-color);
+}
+
+.sidebar-toggle {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.app-shell--sidebar-collapsed .sidebar-toggle {
+  margin-left: 0;
+}
+
+.sidebar-divider {
   margin: 0;
 }
 
-.dataset-item,
-.file-item {
-  background: #fafbff;
-  border: 1px solid #e8ebf3;
-  border-radius: 14px;
-  padding: 0.9rem 1rem;
-  margin-bottom: 0.9rem;
-  transition: all 0.15s ease;
+.card-title-row,
+.sidebar-meta-list {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-.dataset-item {
-  cursor: pointer;
+.sidebar-meta-list {
+  align-items: flex-start;
+  flex-direction: column;
 }
 
-.dataset-item:hover {
-  background: #f1f4ff;
-  border-color: #d9e1ff;
-  transform: translateY(-1px);
-}
-
-.dataset-name,
-.file-name {
+.sidebar-selected-name {
+  color: var(--p-text-muted-color);
   font-weight: 600;
-  margin-bottom: 0.35rem;
-  font-size: 1rem;
-}
-
-.dataset-meta,
-.file-meta {
-  font-size: 0.9rem;
-  color: #666;
   word-break: break-word;
 }
 
-.download-button {
-  padding: 0.45rem 0.8rem;
-  border: none;
-  border-radius: 10px;
-  background: #2f6fed;
-  color: white;
-  cursor: pointer;
-  font-weight: 600;
+.sidebar-spinner {
+  width: 2rem;
+  height: 2rem;
 }
 
-.download-button:hover {
-  background: #255dd0;
-}
-
-.empty-state {
-  color: #666;
-  font-style: italic;
-}
-
-.create-dataset-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-
-.text-input {
-  width: 100%;
-  padding: 0.7rem 0.9rem;
-  border: 1px solid #d9deea;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  box-sizing: border-box;
-}
-
-.textarea-input {
-  min-height: 90px;
-  resize: vertical;
-}
-
-.primary-button {
-  padding: 0.7rem 1rem;
-  border: none;
-  border-radius: 10px;
-  background: #2f6fed;
-  color: white;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.primary-button:hover {
-  background: #255dd0;
-}
-
-.primary-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.secondary-button {
-  padding: 0.7rem 1rem;
-  border: none;
-  border-radius: 10px;
-  background: #6c757d;
-  color: white;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.secondary-button:hover {
-  background: #5a6268;
-}
-
-.secondary-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.edit-dataset-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.danger-button {
-  padding: 0.45rem 0.8rem;
-  border: none;
-  border-radius: 10px;
-  background: #d9534f;
-  color: white;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.danger-button:hover {
-  background: #c63f3b;
-}
-
-.small-button {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.8rem;
+.sidebar-card {
   border-radius: 8px;
-}
-
-.file-actions-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-  .bulk-actions-group {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-
-.bulk-actions-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.bulk-metadata-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.6rem;
-  align-items: end;
-}
-
-.selected-files-info {
-  font-size: 0.9rem;
-  color: #666;
-  white-space: nowrap;
-  align-self: flex-start;
-}
-
-.move-select {
-  min-width: 180px;
-  margin: 0;
-}
-
-.select-all-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.95rem;
-}
-
-.file-top-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 0.35rem;
-}
-
-.file-checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  cursor: pointer;
-}
-
-.file-button-row {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.upload-section {
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.hidden-file-input {
-  display: none;
-}
-
-.upload-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-width: 260px;
-}
-
-.upload-progress-text {
-  font-size: 0.85rem;
-  color: #555;
-}
-
-.upload-progress-bar {
-  width: 100%;
-  height: 10px;
-  background: #e8ebf3;
-  border-radius: 999px;
+  border: 1px solid var(--p-surface-200);
   overflow: hidden;
+  box-shadow: none;
+  background: var(--p-surface-50);
 }
 
-.upload-progress-bar-fill {
-  height: 100%;
-  background: #2f6fed;
-  transition: width 0.15s ease;
+.sidebar-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
 }
 
-.upload-progress-percent {
-  font-size: 0.8rem;
-  color: #666;
+.app-main {
+  padding: 1.25rem clamp(1rem, 2vw, 2.5rem) 2rem;
+  min-width: 0;
 }
 
-.upload-detection-panel {
+.main-toolbar,
+.app-message {
   margin-bottom: 1rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid #d9deea;
-  border-radius: 12px;
-  background: #fafbff;
 }
 
-.upload-detection-header {
+.workspace-shell {
+  border-radius: 8px;
+  border: 1px solid var(--p-surface-200);
+  box-shadow: var(--p-card-shadow);
+  background: var(--p-content-background);
+}
+
+.workspace-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  margin-bottom: 0.75rem;
   flex-wrap: wrap;
 }
 
-.upload-detection-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+.workspace-heading {
+  min-width: 0;
 }
 
-.upload-detection-list {
-  list-style: none;
-  padding: 0;
+.workspace-title {
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--p-text-color);
+  overflow-wrap: anywhere;
 }
 
-.upload-detection-item {
-  padding: 0.55rem 0.7rem;
-  border: 1px solid #e8ebf3;
-  border-radius: 10px;
-  background: white;
+.workspace-subtitle {
+  margin: 0.35rem 0 0;
+  color: var(--p-text-muted-color);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
 }
 
-.upload-detection-filename {
-  font-weight: 600;
-  margin-bottom: 0.2rem;
-}
-
-.upload-detection-meta {
-  display: flex;
-  gap: 0.8rem;
-  flex-wrap: wrap;
-  color: #555;
-  font-size: 0.9rem;
-}
-
-.clickable-file {
-  cursor: pointer;
-}
-
-.clickable-file:hover {
-  background: #f1f4ff;
-  border-color: #d9e1ff;
-}
-
-.file-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-
-.file-detail-main-column {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+.workspace-body {
   min-width: 0;
 }
 
-
-.sub-card {
-  border-radius: 14px;
-}
-
-.file-analysis-card {
-  min-width: 0;
-}
-
-.detail-trace-preview {
-  width: 100%;
-}
-
-.detail-view-toggle {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.active-toggle {
-  background: #2f6fed;
-}
-
-.detail-controls-grid {
+.workspace-body--file {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.75rem;
-  align-items: end;
-}
-
-.detail-controls-grid label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.9rem;
-}
-
-.preview-stack {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 0.6rem;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+  gap: 1.25rem;
   align-items: start;
 }
 
-.preview-block {
+.empty-state-content {
+  min-height: 320px;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-}
-
-.preview-block--acf {
-  max-width: 220px;
-}
-
-.preview-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #666;
-}
-
-.file-tags,
-.file-tags-inline {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.file-tags-inline {
-  margin-top: 0.5rem;
-}
-
-.tag-pill {
-  display: inline-flex;
   align-items: center;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  background: #eef2ff;
-  color: #445;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.removable-tag {
-  cursor: pointer;
-}
-
-.removable-tag:hover {
-  background: #e0e7ff;
-}
-
-.tag-input-row {
-  display: flex;
-  gap: 0.6rem;
-  align-items: center;
-}
-
-.tag-input-row .text-input {
-  max-width: 220px;
-}
-
-.file-notes-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.file-metadata-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  justify-content: center;
   gap: 0.75rem;
+  text-align: center;
+  color: var(--p-text-muted-color);
 }
 
-.file-metadata-grid label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.9rem;
+.empty-icon {
+  font-size: 2rem;
+  color: var(--p-primary-color);
 }
 
-.notes-label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #555;
-}
-
-.save-notes-button {
-  align-self: flex-start;
-}
-
-/* --- PrimeVue compact control adjustments --- */
-:deep(.p-inputtext),
-:deep(.p-select),
-:deep(.p-button) {
-  font-size: 0.9rem;
-}
-
-:deep(.p-inputtext),
-:deep(.p-select) {
-  min-height: 50px;
-}
-
-:deep(.p-inputtext) {
-  padding-top: 0.45rem;
-  padding-bottom: 0.45rem;
-}
-
-:deep(.p-select) {
-  height: 50px;
-}
-
-:deep(.p-select .p-select-label) {
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
+:deep(.main-toolbar .p-toolbar-end) {
   display: flex;
   align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
 }
 
-:deep(.p-select .p-select-trigger) {
-  width: 2rem;
+:deep(.app-breadcrumb) {
+  padding: 0;
+  border: none;
+  background: transparent;
 }
 
-:deep(.p-button.small-button) {
-  padding: 0.3rem 0.6rem;
+:deep(.dataset-menu .p-panelmenu-panel) {
+  background: transparent;
+  border: none;
 }
 
-@media (max-width: 900px) {
-  .layout,
-  .layout--file-selected {
+:deep(.dataset-menu .p-panelmenu-header-link) {
+  background: transparent;
+  color: var(--p-text-color);
+  border-radius: 8px;
+  padding: 0.8rem 0.9rem;
+}
+
+:deep(.dataset-menu .p-panelmenu-header-link:hover) {
+  background: var(--p-surface-100);
+}
+
+:deep(.dataset-menu .p-panelmenu-content) {
+  background: transparent;
+  border: none;
+  padding-top: 0.35rem;
+}
+
+:deep(.dataset-menu .p-menuitem-link) {
+  color: var(--p-text-muted-color);
+  border-radius: 8px;
+  padding: 0.7rem 0.8rem;
+}
+
+:deep(.dataset-menu .p-menuitem-link:hover) {
+  background: var(--p-surface-100);
+  color: var(--p-text-color);
+}
+
+:deep(.sidebar-card .p-card-body) {
+  padding: 1rem;
+}
+
+:deep(.sidebar-card .p-card) {
+  background: transparent;
+}
+
+:deep(.workspace-shell .p-card-body) {
+  padding: clamp(1rem, 1.5vw, 1.75rem);
+}
+
+:deep(.workspace-shell .p-card-title) {
+  margin-bottom: 1rem;
+}
+
+:deep(.p-tag) {
+  font-weight: 600;
+}
+
+@media (max-width: 1200px) {
+  .workspace-body--file {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 960px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--p-surface-200);
+  }
+
+  .app-main {
+    padding: 1rem;
+  }
+
+  .workspace-title {
+    font-size: 1.6rem;
   }
 }
 </style>

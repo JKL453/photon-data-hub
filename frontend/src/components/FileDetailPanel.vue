@@ -1,9 +1,19 @@
 <script setup>
-import Card from 'primevue/card'
 import Button from 'primevue/button'
+import Card from 'primevue/card'
+import Fieldset from 'primevue/fieldset'
+import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
-import Textarea from 'primevue/textarea'
+import Message from 'primevue/message'
+import ProgressSpinner from 'primevue/progressspinner'
 import Select from 'primevue/select'
+import Tab from 'primevue/tab'
+import TabList from 'primevue/tablist'
+import TabPanel from 'primevue/tabpanel'
+import TabPanels from 'primevue/tabpanels'
+import Tabs from 'primevue/tabs'
+import Tag from 'primevue/tag'
+import Textarea from 'primevue/textarea'
 import TracePreview from './TracePreview.vue'
 
 defineProps({
@@ -110,188 +120,219 @@ const emit = defineEmits([
   'update:acfTauMinUs',
   'update:acfTauMaxUs',
 ])
+
+function updateDetailView(view) {
+  if (!view) return
+  emit('switch-detail-view', view)
+}
+
+function updateTraceBinWidth(value, fileId) {
+  emit('update:selectedDetailBinWidthMs', value)
+  emit('load-detail-trace', fileId)
+}
 </script>
 
 <template>
   <Card class="panel-card panel-card--main-detail">
-    <template #title>File Details</template>
+    <template #title>
+      <div class="panel-title-row">
+        <span>File Details</span>
+        <div class="panel-actions">
+          <Tag value="Selected file" severity="info" rounded />
+          <Button
+            label="Back"
+            icon="pi pi-arrow-left"
+            size="small"
+            severity="secondary"
+            variant="outlined"
+            @click="emit('back')"
+          />
+        </div>
+      </div>
+    </template>
+
     <template #content>
       <div class="panel-content file-detail-main-column">
-        <Button
-          class="secondary-button small-button"
-          label="← Back to dataset"
-          @click="emit('back')"
-        />
-
-        <Card class="sub-card">
-          <template #title>File Info</template>
-          <template #content>
-            <div class="panel-content">
-              <h3>{{ selectedFile.filename }}</h3>
+        <Fieldset legend="File Info">
+          <div class="file-info-stack">
+            <div>
+              <h3 class="file-title">{{ selectedFile.filename }}</h3>
               <p class="file-meta">{{ selectedFile.object_key }}</p>
-
-              <div class="file-tags" v-if="selectedFile.tags?.length">
-                <span
-                  v-for="tag in selectedFile.tags"
-                  :key="tag.id"
-                  class="tag-pill removable-tag"
-                  @click="emit('remove-tag', selectedFile, tag)"
-                >
-                  {{ tag.name }} ×
-                </span>
-              </div>
-
-              <div class="tag-input-row">
-                <InputText
-                  :model-value="newTagName"
-                  placeholder="Add tag"
-                  class="text-input"
-                  @update:model-value="emit('update:newTagName', $event)"
-                  @keyup.enter="emit('add-tag', selectedFile)"
-                />
-                <Button
-                  class="secondary-button small-button"
-                  label="Add tag"
-                  @click="emit('add-tag', selectedFile)"
-                />
-              </div>
             </div>
-          </template>
-        </Card>
 
-        <Card class="sub-card file-analysis-card">
-          <template #title>Analysis</template>
-          <template #content>
-            <div class="panel-content">
-              <div class="detail-view-toggle">
-                <Button
-                  class="secondary-button small-button"
-                  :class="{ 'active-toggle': selectedDetailView === 'trace' }"
-                  label="Trace"
-                  @click="emit('switch-detail-view', 'trace')"
-                />
-                <Button
-                  class="secondary-button small-button"
-                  :class="{ 'active-toggle': selectedDetailView === 'acf' }"
-                  label="ACF"
-                  @click="emit('switch-detail-view', 'acf')"
-                />
-              </div>
-
-              <div v-if="selectedDetailView === 'trace'" class="detail-controls">
-                <label for="bin-width-select">Bin width:</label>
-                <Select
-                  id="bin-width-select"
-                  :model-value="selectedDetailBinWidthMs"
-                  :options="detailBinWidthOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  class="text-input"
-                  @update:model-value="emit('update:selectedDetailBinWidthMs', $event)"
-                  @change="emit('load-detail-trace', selectedFile.id)"
-                />
-              </div>
-
-              <div v-if="selectedDetailView === 'acf'" class="detail-controls detail-controls-grid">
-                <label>
-                  Bins/dec
-                  <input
-                    :value="acfBinsPerDec"
-                    type="number"
-                    min="1"
-                    class="text-input"
-                    @input="emit('update:acfBinsPerDec', Number($event.target.value))"
-                  />
-                </label>
-
-                <label>
-                  Lag min exp
-                  <input
-                    :value="acfLagMinExp"
-                    type="number"
-                    class="text-input"
-                    @input="emit('update:acfLagMinExp', Number($event.target.value))"
-                  />
-                </label>
-
-                <label>
-                  Lag max exp
-                  <input
-                    :value="acfLagMaxExp"
-                    type="number"
-                    class="text-input"
-                    @input="emit('update:acfLagMaxExp', Number($event.target.value))"
-                  />
-                </label>
-
-                <label>
-                  Cut points
-                  <input
-                    :value="acfCutPoints"
-                    type="number"
-                    min="0"
-                    class="text-input"
-                    @input="emit('update:acfCutPoints', Number($event.target.value))"
-                  />
-                </label>
-
-                <label>
-                  τ min (µs)
-                  <input
-                    :value="acfTauMinUs"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    class="text-input"
-                    @input="emit('update:acfTauMinUs', Number($event.target.value))"
-                  />
-                </label>
-
-                <label>
-                  τ max (µs, 0 = none)
-                  <input
-                    :value="acfTauMaxUs"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    class="text-input"
-                    @input="emit('update:acfTauMaxUs', Number($event.target.value))"
-                  />
-                </label>
-
-                <Button
-                  class="secondary-button small-button"
-                  :label="loadingFileAcfTrace ? 'Loading...' : 'Update ACF'"
-                  :loading="loadingFileAcfTrace"
-                  :disabled="loadingFileAcfTrace"
-                  @click="emit('load-acf-trace', selectedFile.id)"
-                />
-              </div>
-
-              <TracePreview
-                v-if="selectedDetailView === 'trace' && fileDetailTrace"
-                :preview="fileDetailTrace"
-                variant="detail"
+            <div v-if="selectedFile.tags?.length" class="file-tags">
+              <Tag
+                v-for="tag in selectedFile.tags"
+                :key="tag.id"
+                :value="`${tag.name} ×`"
+                severity="info"
+                rounded
+                class="removable-tag"
+                @click="emit('remove-tag', selectedFile, tag)"
               />
-
-              <TracePreview
-                v-else-if="selectedDetailView === 'acf' && fileAcfTrace"
-                :preview="fileAcfTrace"
-                variant="detail"
-              />
-
-              <p v-else-if="selectedDetailView === 'trace' && loadingFileDetailTrace" class="empty-state">
-                Loading Detail-Trace ...
-              </p>
-
-              <p v-else-if="selectedDetailView === 'acf' && loadingFileAcfTrace" class="empty-state">
-                Loading ACF/CCF ...
-              </p>
-
-              <p v-else class="empty-state">No data available for this view.</p>
             </div>
-          </template>
-        </Card>
+
+            <div class="tag-input-row">
+              <InputText
+                :model-value="newTagName"
+                placeholder="Add tag"
+                @update:model-value="emit('update:newTagName', $event)"
+                @keyup.enter="emit('add-tag', selectedFile)"
+              />
+              <Button
+                label="Add tag"
+                icon="pi pi-plus"
+                severity="secondary"
+                @click="emit('add-tag', selectedFile)"
+              />
+            </div>
+          </div>
+        </Fieldset>
+
+        <Fieldset legend="Analysis" class="file-analysis-fieldset">
+          <div class="panel-content">
+            <Tabs
+              :value="selectedDetailView"
+              scrollable
+              class="analysis-tabs"
+              @update:value="updateDetailView"
+            >
+              <TabList>
+                <Tab value="trace">
+                  <i class="pi pi-chart-line"></i>
+                  <span>Trace</span>
+                </Tab>
+                <Tab value="acf">
+                  <i class="pi pi-wave-pulse"></i>
+                  <span>ACF</span>
+                </Tab>
+              </TabList>
+
+              <TabPanels>
+                <TabPanel value="trace">
+                  <div class="tab-panel-content">
+                    <div class="detail-controls">
+                      <label class="field">
+                        <span>Bin width</span>
+                        <Select
+                          :model-value="selectedDetailBinWidthMs"
+                          :options="detailBinWidthOptions"
+                          optionLabel="label"
+                          optionValue="value"
+                          @update:model-value="updateTraceBinWidth($event, selectedFile.id)"
+                        />
+                      </label>
+                    </div>
+
+                    <TracePreview
+                      v-if="fileDetailTrace"
+                      :preview="fileDetailTrace"
+                      variant="detail"
+                    />
+
+                    <div v-else-if="loadingFileDetailTrace" class="loading-inline">
+                      <ProgressSpinner class="inline-spinner" stroke-width="4" />
+                      <span>Loading Detail-Trace ...</span>
+                    </div>
+
+                    <Message v-else severity="secondary" :closable="false">
+                      No trace data available.
+                    </Message>
+                  </div>
+                </TabPanel>
+
+                <TabPanel value="acf">
+                  <div class="tab-panel-content">
+                    <div class="detail-controls-grid">
+                      <label class="field">
+                        <span>Bins/dec</span>
+                        <InputNumber
+                          :model-value="acfBinsPerDec"
+                          :min="1"
+                          :use-grouping="false"
+                          @update:model-value="emit('update:acfBinsPerDec', $event ?? 1)"
+                        />
+                      </label>
+
+                      <label class="field">
+                        <span>Lag min exp</span>
+                        <InputNumber
+                          :model-value="acfLagMinExp"
+                          :use-grouping="false"
+                          @update:model-value="emit('update:acfLagMinExp', $event ?? 0)"
+                        />
+                      </label>
+
+                      <label class="field">
+                        <span>Lag max exp</span>
+                        <InputNumber
+                          :model-value="acfLagMaxExp"
+                          :use-grouping="false"
+                          @update:model-value="emit('update:acfLagMaxExp', $event ?? 0)"
+                        />
+                      </label>
+
+                      <label class="field">
+                        <span>Cut points</span>
+                        <InputNumber
+                          :model-value="acfCutPoints"
+                          :min="0"
+                          :use-grouping="false"
+                          @update:model-value="emit('update:acfCutPoints', $event ?? 0)"
+                        />
+                      </label>
+
+                      <label class="field">
+                        <span>τ min (µs)</span>
+                        <InputNumber
+                          :model-value="acfTauMinUs"
+                          :min="0"
+                          :min-fraction-digits="0"
+                          :max-fraction-digits="3"
+                          @update:model-value="emit('update:acfTauMinUs', $event ?? 0)"
+                        />
+                      </label>
+
+                      <label class="field">
+                        <span>τ max (µs, 0 = none)</span>
+                        <InputNumber
+                          :model-value="acfTauMaxUs"
+                          :min="0"
+                          :min-fraction-digits="0"
+                          :max-fraction-digits="3"
+                          @update:model-value="emit('update:acfTauMaxUs', $event ?? 0)"
+                        />
+                      </label>
+
+                      <Button
+                        label="Update ACF"
+                        icon="pi pi-refresh"
+                        :loading="loadingFileAcfTrace"
+                        :disabled="loadingFileAcfTrace"
+                        @click="emit('load-acf-trace', selectedFile.id)"
+                      />
+                    </div>
+
+                    <TracePreview
+                      v-if="fileAcfTrace"
+                      :preview="fileAcfTrace"
+                      variant="detail"
+                    />
+
+                    <div v-else-if="loadingFileAcfTrace" class="loading-inline">
+                      <ProgressSpinner class="inline-spinner" stroke-width="4" />
+                      <span>Loading ACF/CCF ...</span>
+                    </div>
+
+                    <Message v-else severity="secondary" :closable="false">
+                      No ACF data available.
+                    </Message>
+                  </div>
+                </TabPanel>
+              </TabPanels>
+            </Tabs>
+          </div>
+        </Fieldset>
       </div>
     </template>
   </Card>
@@ -300,100 +341,119 @@ const emit = defineEmits([
     <template #title>Notes & Metadata</template>
     <template #content>
       <div class="panel-content">
-        <div class="file-notes-section">
-          <label class="notes-label" for="file-notes-textarea">File notes</label>
+        <label class="field">
+          <span>File notes</span>
           <Textarea
-            id="file-notes-textarea"
             :model-value="fileNotesDraft"
-            class="text-input textarea-input"
+            auto-resize
+            rows="5"
             placeholder="Add notes for this file"
             @update:model-value="emit('update:fileNotesDraft', $event)"
           />
+        </label>
 
+        <Fieldset legend="Metadata">
           <div class="file-metadata-grid">
-            <label>
-              Measurement date
-              <input
-                :value="fileMeasurementDateDraft"
+            <label class="field">
+              <span>Measurement date</span>
+              <InputText
+                :model-value="fileMeasurementDateDraft"
                 type="datetime-local"
-                class="text-input"
-                @input="emit('update:fileMeasurementDateDraft', $event.target.value)"
+                @update:model-value="emit('update:fileMeasurementDateDraft', $event)"
               />
             </label>
 
-            <label>
-              Excitation power (µW)
-              <input
-                :value="fileExcitationPowerDraft"
-                type="number"
-                step="0.1"
-                min="0"
-                class="text-input"
+            <label class="field">
+              <span>Excitation power (µW)</span>
+              <InputNumber
+                :model-value="fileExcitationPowerDraft === '' ? null : Number(fileExcitationPowerDraft)"
+                :min="0"
+                :min-fraction-digits="0"
+                :max-fraction-digits="3"
                 placeholder="e.g. 5"
-                @input="emit('update:fileExcitationPowerDraft', $event.target.value)"
+                @update:model-value="emit('update:fileExcitationPowerDraft', $event ?? '')"
               />
             </label>
 
-            <label>
-              Objective
+            <label class="field">
+              <span>Objective</span>
               <InputText
                 :model-value="fileObjectiveDraft"
-                class="text-input"
                 placeholder="e.g. Plan Apo"
                 @update:model-value="emit('update:fileObjectiveDraft', $event)"
               />
             </label>
           </div>
+        </Fieldset>
 
-          <Button
-            class="secondary-button small-button save-notes-button"
-            :label="savingFileNotes ? 'Saving...' : 'Save notes'"
-            :loading="savingFileNotes"
-            :disabled="savingFileNotes"
-            @click="emit('save-notes')"
-          />
-        </div>
+        <Button
+          label="Save notes"
+          icon="pi pi-save"
+          class="save-notes-button"
+          :loading="savingFileNotes"
+          :disabled="savingFileNotes"
+          @click="emit('save-notes')"
+        />
       </div>
     </template>
   </Card>
 </template>
 
 <style scoped>
+.panel-title-row,
+.panel-actions,
+.tag-input-row,
+.file-tags,
+.loading-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.panel-title-row {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.panel-actions {
+  flex-wrap: wrap;
+}
+
 .panel-content,
 .file-detail-main-column,
-.file-notes-section {
+.file-info-stack,
+.tab-panel-content {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.file-detail-main-column {
+.file-detail-main-column,
+.file-analysis-fieldset,
+.panel-card--main-detail,
+.panel-card--side-detail {
   min-width: 0;
 }
 
-.sub-card {
-  border-radius: 14px;
+.panel-card--side-detail {
+  position: sticky;
+  top: 1rem;
 }
 
-.file-analysis-card {
-  min-width: 0;
+.file-title {
+  margin: 0 0 0.35rem;
+  overflow-wrap: anywhere;
+}
+
+.file-meta {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--p-text-muted-color);
+  word-break: break-word;
 }
 
 .file-tags {
-  display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.tag-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  background: #eef2ff;
-  color: #445;
-  font-size: 0.75rem;
-  font-weight: 600;
 }
 
 .removable-tag {
@@ -401,59 +461,73 @@ const emit = defineEmits([
 }
 
 .tag-input-row {
-  display: flex;
-  gap: 0.6rem;
-  align-items: center;
+  align-items: stretch;
 }
 
-.file-meta {
-  font-size: 0.9rem;
-  color: #666;
-  word-break: break-word;
-}
-
-.detail-view-toggle {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.active-toggle {
-  background: #2f6fed;
-}
-
-.detail-controls-grid {
+.detail-controls-grid,
+.file-metadata-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: 1fr;
+  gap: 1rem;
   align-items: end;
 }
 
-.detail-controls-grid label,
-.file-metadata-grid label {
+.detail-controls-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.detail-controls {
+  max-width: 260px;
+}
+
+.field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
   font-size: 0.9rem;
-}
-
-.file-metadata-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.75rem;
-}
-
-.textarea-input {
-  min-height: 90px;
-  resize: vertical;
+  font-weight: 600;
+  color: var(--p-text-muted-color);
 }
 
 .save-notes-button {
   align-self: flex-start;
 }
 
-.notes-label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #555;
+.inline-spinner {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+:deep(.p-fieldset) {
+  border-radius: 8px;
+}
+
+:deep(.analysis-tabs .p-tab) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+:deep(.analysis-tabs .p-tabpanels) {
+  padding: 1rem 0 0;
+}
+
+:deep(.p-inputtext),
+:deep(.p-textarea),
+:deep(.p-inputnumber),
+:deep(.p-inputnumber-input),
+:deep(.p-select),
+:deep(.analysis-tabs) {
+  width: 100%;
+}
+
+@media (max-width: 1200px) {
+  .panel-card--side-detail {
+    position: static;
+  }
+
+  .file-metadata-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
 }
 </style>
