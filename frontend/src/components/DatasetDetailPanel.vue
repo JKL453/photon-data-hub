@@ -1,6 +1,5 @@
 <script setup>
 import Button from 'primevue/button'
-import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
 import Divider from 'primevue/divider'
 import Fieldset from 'primevue/fieldset'
@@ -65,31 +64,51 @@ const emit = defineEmits([
 function isFileSelected(selectedFileIds, fileId) {
   return selectedFileIds.includes(fileId)
 }
+
+function formatMeasurementDate(value) {
+  if (!value) return null
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+
+  return date.toLocaleDateString('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+}
+
+function formatExcitationPower(value) {
+  if (value == null || value === '') return null
+
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) return null
+
+  return `${Number.isInteger(numericValue) ? numericValue : numericValue.toFixed(2)} µW`
+}
+
+function fileMetadataItems(file) {
+  const measurementDate = formatMeasurementDate(file.measurement_date)
+  const excitationPower = formatExcitationPower(file.excitation_power)
+
+  return [
+    measurementDate ? { icon: 'pi pi-calendar', label: measurementDate } : null,
+    excitationPower ? { icon: 'pi pi-bolt', label: excitationPower } : null,
+    file.objective ? { icon: 'pi pi-search', label: file.objective } : null,
+  ].filter(Boolean)
+}
 </script>
 
 <template>
-  <Card class="panel-card">
-    <template #title>
-      <div class="panel-title-row">
-        <span>Dataset Details</span>
-        <Tag
-          v-if="selectedDataset"
-          :value="`${selectedDataset.files.length} files`"
-          severity="secondary"
-          rounded
-        />
+  <section class="dataset-detail-panel">
+    <div class="panel-content">
+      <div v-if="loadingDatasetDetail" class="loading-state">
+        <Message severity="info" :closable="false">Dataset-Details werden geladen ...</Message>
+        <ProgressBar mode="indeterminate" class="loading-progress" />
       </div>
-    </template>
 
-    <template #content>
-      <div class="panel-content">
-        <div v-if="loadingDatasetDetail" class="loading-state">
-          <Message severity="info" :closable="false">Dataset-Details werden geladen ...</Message>
-          <ProgressBar mode="indeterminate" class="loading-progress" />
-        </div>
-
-        <div v-else-if="selectedDataset" class="dataset-workspace">
-          <Fieldset legend="Dataset Metadata">
+      <div v-else-if="selectedDataset" class="dataset-workspace">
+          <Fieldset legend="Dataset Metadata" toggleable collapsed>
             <div class="form-grid">
               <label class="field">
                 <span>Name</span>
@@ -141,13 +160,53 @@ function isFileSelected(selectedFileIds, fileId) {
             </div>
           </Fieldset>
 
-          <Divider />
+          <Fieldset v-if="selectedDataset.files.length > 0" legend="File Metadata" toggleable collapsed>
+            <div class="bulk-metadata-panel">
+              <label class="field">
+                <span>Measurement date</span>
+                <InputText
+                  :model-value="bulkMeasurementDateDraft"
+                  type="datetime-local"
+                  @update:model-value="emit('update:bulkMeasurementDateDraft', $event)"
+                />
+              </label>
+
+              <label class="field">
+                <span>Power (µW)</span>
+                <InputNumber
+                  :model-value="bulkExcitationPowerDraft === '' ? null : Number(bulkExcitationPowerDraft)"
+                  :min="0"
+                  :min-fraction-digits="0"
+                  :max-fraction-digits="3"
+                  placeholder="Power (µW)"
+                  @update:model-value="emit('update:bulkExcitationPowerDraft', $event ?? '')"
+                />
+              </label>
+
+              <label class="field">
+                <span>Objective</span>
+                <InputText
+                  :model-value="bulkObjectiveDraft"
+                  placeholder="Objective"
+                  @update:model-value="emit('update:bulkObjectiveDraft', $event)"
+                />
+              </label>
+
+              <Button
+                label="Set metadata"
+                icon="pi pi-tags"
+                :loading="savingBulkMetadata"
+                :disabled="selectedFileIds.length === 0 || savingBulkMetadata"
+                @click="emit('update-selected-metadata')"
+              />
+            </div>
+          </Fieldset>
 
           <Toolbar class="section-toolbar">
             <template #start>
               <div class="toolbar-title">
-                <i class="pi pi-file"></i>
-                <span>Files</span>
+                <i class="pi pi-upload"></i>
+                <span>Upload</span>
               </div>
             </template>
 
@@ -163,6 +222,7 @@ function isFileSelected(selectedFileIds, fileId) {
               <Button
                 label="Upload files"
                 icon="pi pi-upload"
+                size="small"
                 :loading="uploadingFiles"
                 :disabled="uploadingFiles"
                 @click="emit('open-file-picker')"
@@ -229,124 +289,88 @@ function isFileSelected(selectedFileIds, fileId) {
 
           <Toolbar v-if="selectedDataset.files.length > 0" class="bulk-toolbar">
             <template #start>
-              <label class="select-all-row">
-                <Checkbox
-                  binary
-                  :model-value="selectedFileIds.length === selectedDataset.files.length"
-                  @update:model-value="emit('toggle-select-all-files')"
-                />
-                <span>Select all</span>
-              </label>
-              <Tag :value="`${selectedFileIds.length} selected`" severity="secondary" rounded />
-            </template>
+              <div class="bulk-toolbar-row">
+                <label class="select-all-row">
+                  <Checkbox
+                    binary
+                    :model-value="selectedFileIds.length === selectedDataset.files.length"
+                    @update:model-value="emit('toggle-select-all-files')"
+                  />
+                  <span>Select all</span>
+                </label>
+                <Tag :value="`${selectedFileIds.length} selected`" severity="secondary" rounded />
+                <div class="bulk-toolbar-actions">
+                  <Select
+                    :model-value="moveTargetDatasetId"
+                    :options="moveTargetDatasetOptions"
+                    optionLabel="label"
+                    optionValue="value"
+                    placeholder="Target"
+                    class="move-select"
+                    @update:model-value="emit('update:moveTargetDatasetId', $event)"
+                  />
 
-            <template #end>
-              <div class="bulk-actions">
-                <Select
-                  :model-value="moveTargetDatasetId"
-                  :options="moveTargetDatasetOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  placeholder="Target dataset"
-                  class="move-select"
-                  @update:model-value="emit('update:moveTargetDatasetId', $event)"
-                />
+                  <Button
+                    icon="pi pi-arrow-right"
+                    aria-label="Move selected files"
+                    title="Move selected"
+                    size="small"
+                    severity="secondary"
+                    rounded
+                    :loading="movingSelectedFiles"
+                    :disabled="selectedFileIds.length === 0 || !moveTargetDatasetId || movingSelectedFiles"
+                    @click="emit('move-selected-files')"
+                  />
 
-                <Button
-                  label="Move"
-                  icon="pi pi-arrow-right"
-                  size="small"
-                  severity="secondary"
-                  :loading="movingSelectedFiles"
-                  :disabled="selectedFileIds.length === 0 || !moveTargetDatasetId || movingSelectedFiles"
-                  @click="emit('move-selected-files')"
-                />
+                  <Button
+                    icon="pi pi-copy"
+                    aria-label="Copy selected files"
+                    title="Copy selected"
+                    size="small"
+                    severity="secondary"
+                    variant="outlined"
+                    rounded
+                    :disabled="selectedFileIds.length === 0 || !moveTargetDatasetId"
+                    @click="emit('copy-selected-files')"
+                  />
 
-                <Button
-                  label="Copy"
-                  icon="pi pi-copy"
-                  size="small"
-                  severity="secondary"
-                  variant="outlined"
-                  :disabled="selectedFileIds.length === 0 || !moveTargetDatasetId"
-                  @click="emit('copy-selected-files')"
-                />
-
-                <Button
-                  label="Delete"
-                  icon="pi pi-trash"
-                  size="small"
-                  severity="danger"
-                  variant="outlined"
-                  :loading="deletingSelectedFiles"
-                  :disabled="selectedFileIds.length === 0 || deletingSelectedFiles"
-                  @click="emit('delete-selected-files')"
-                />
+                  <Button
+                    icon="pi pi-trash"
+                    aria-label="Delete selected files"
+                    title="Delete selected"
+                    size="small"
+                    severity="danger"
+                    variant="outlined"
+                    rounded
+                    :loading="deletingSelectedFiles"
+                    :disabled="selectedFileIds.length === 0 || deletingSelectedFiles"
+                    @click="emit('delete-selected-files')"
+                  />
+                </div>
               </div>
             </template>
           </Toolbar>
-
-          <Fieldset v-if="selectedDataset.files.length > 0" legend="Bulk Metadata" toggleable collapsed>
-            <div class="bulk-metadata-panel">
-              <label class="field">
-                <span>Measurement date</span>
-                <InputText
-                  :model-value="bulkMeasurementDateDraft"
-                  type="datetime-local"
-                  @update:model-value="emit('update:bulkMeasurementDateDraft', $event)"
-                />
-              </label>
-
-              <label class="field">
-                <span>Power (µW)</span>
-                <InputNumber
-                  :model-value="bulkExcitationPowerDraft === '' ? null : Number(bulkExcitationPowerDraft)"
-                  :min="0"
-                  :min-fraction-digits="0"
-                  :max-fraction-digits="3"
-                  placeholder="Power (µW)"
-                  @update:model-value="emit('update:bulkExcitationPowerDraft', $event ?? '')"
-                />
-              </label>
-
-              <label class="field">
-                <span>Objective</span>
-                <InputText
-                  :model-value="bulkObjectiveDraft"
-                  placeholder="Objective"
-                  @update:model-value="emit('update:bulkObjectiveDraft', $event)"
-                />
-              </label>
-
-              <Button
-                label="Set metadata"
-                icon="pi pi-tags"
-                :loading="savingBulkMetadata"
-                :disabled="selectedFileIds.length === 0 || savingBulkMetadata"
-                @click="emit('update-selected-metadata')"
-              />
-            </div>
-          </Fieldset>
 
           <div v-if="selectedDataset.files.length > 0" class="file-list">
             <article
               v-for="file in selectedDataset.files"
               :key="file.id"
               class="file-row"
+              :class="{ 'file-row--selected': isFileSelected(selectedFileIds, file.id) }"
               :title="file.object_key"
               @click="emit('open-file-detail', file)"
             >
               <div class="file-row-meta">
                 <div class="file-row-titlebar">
                   <label class="file-checkbox-row">
-                  <Checkbox
-                    binary
-                    :model-value="isFileSelected(selectedFileIds, file.id)"
-                    @click.stop
-                    @update:model-value="emit('toggle-file-selection', file.id)"
-                  />
-                  <span class="file-name">{{ file.filename }}</span>
-                </label>
+                    <Checkbox
+                      binary
+                      :model-value="isFileSelected(selectedFileIds, file.id)"
+                      @click.stop
+                      @update:model-value="emit('toggle-file-selection', file.id)"
+                    />
+                    <span class="file-name">{{ file.filename }}</span>
+                  </label>
 
                   <div class="file-row-actions">
                     <Button
@@ -373,10 +397,23 @@ function isFileSelected(selectedFileIds, fileId) {
                 </div>
 
                 <div class="file-row-summary">
-                  <span class="file-path-hint">
-                    <i class="pi pi-cloud"></i>
-                    Stored object
-                  </span>
+                  <div class="file-metadata-strip">
+                    <span
+                      v-for="item in fileMetadataItems(file)"
+                      :key="`${file.id}-${item.icon}-${item.label}`"
+                      class="metadata-chip"
+                    >
+                      <i :class="item.icon"></i>
+                      {{ item.label }}
+                    </span>
+                    <span
+                      v-if="fileMetadataItems(file).length === 0"
+                      class="metadata-chip metadata-chip--empty"
+                    >
+                      <i class="pi pi-info-circle"></i>
+                      No metadata
+                    </span>
+                  </div>
 
                   <div v-if="file.tags?.length" class="file-tags-inline">
                     <Tag
@@ -398,7 +435,10 @@ function isFileSelected(selectedFileIds, fileId) {
                     :preview="file.tracePreview.preview_data"
                     variant="thumb"
                   />
-                  <Message v-else severity="secondary" :closable="false">No trace preview</Message>
+                  <div v-else class="empty-preview">
+                    <i class="pi pi-chart-line"></i>
+                    <span>No trace preview</span>
+                  </div>
                 </div>
 
                 <div class="preview-panel preview-panel--acf">
@@ -407,8 +447,13 @@ function isFileSelected(selectedFileIds, fileId) {
                     v-if="file.acfPreview"
                     :preview="file.acfPreview.preview_data"
                     variant="thumb"
+                    x-scale="logarithmic"
+                    :y-min="1"
                   />
-                  <Message v-else severity="secondary" :closable="false">No ACF preview</Message>
+                  <div v-else class="empty-preview">
+                    <i class="pi pi-wave-pulse"></i>
+                    <span>No ACF preview</span>
+                  </div>
                 </div>
               </div>
             </article>
@@ -422,16 +467,15 @@ function isFileSelected(selectedFileIds, fileId) {
         <Message v-else severity="secondary" :closable="false">
           Select a dataset to view its files.
         </Message>
-      </div>
-    </template>
-  </Card>
+    </div>
+  </section>
 </template>
 
 <style scoped>
-.panel-title-row,
 .form-actions,
 .select-all-row,
 .bulk-actions,
+.bulk-toolbar-row,
 .file-checkbox-row,
 .file-row-titlebar,
 .upload-detection-header,
@@ -442,7 +486,6 @@ function isFileSelected(selectedFileIds, fileId) {
   gap: 0.75rem;
 }
 
-.panel-title-row,
 .upload-detection-header {
   justify-content: space-between;
   flex-wrap: wrap;
@@ -458,6 +501,17 @@ function isFileSelected(selectedFileIds, fileId) {
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.select-all-row {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.bulk-toolbar-row .p-tag,
+.bulk-toolbar-row .p-button {
+  flex: 0 0 auto;
 }
 
 .panel-content,
@@ -510,23 +564,46 @@ function isFileSelected(selectedFileIds, fileId) {
   border-radius: 8px;
 }
 
+.bulk-toolbar {
+  margin-top: 0.25rem;
+}
+
 .hidden-file-input {
   display: none;
 }
 
 .upload-progress-text,
 .file-meta,
-.file-path-hint {
+.metadata-chip {
   color: var(--p-text-muted-color);
   font-size: 0.9rem;
   word-break: break-word;
 }
 
-.file-path-hint {
+.metadata-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   font-size: 0.82rem;
+}
+
+.file-metadata-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.metadata-chip {
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--p-content-background) 92%, var(--p-text-color) 8%);
+  line-height: 1.2;
+}
+
+.metadata-chip--empty {
+  opacity: 0.7;
 }
 
 .upload-detection-actions,
@@ -550,8 +627,26 @@ function isFileSelected(selectedFileIds, fileId) {
   justify-content: flex-end;
 }
 
+.bulk-toolbar-row {
+  flex-wrap: nowrap;
+  width: 100%;
+  overflow: visible;
+}
+
+.bulk-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 .move-select {
-  min-width: 220px;
+  width: 180px;
+  max-width: 180px;
+  flex: 0 1 180px;
+  min-width: 140px;
 }
 
 .file-row {
@@ -571,6 +666,12 @@ function isFileSelected(selectedFileIds, fileId) {
   box-shadow: var(--p-card-shadow);
 }
 
+.file-row--selected {
+  border-color: var(--p-primary-color);
+  background: color-mix(in srgb, var(--p-content-background) 92%, var(--p-primary-color) 8%);
+  box-shadow: inset 4px 0 0 var(--p-primary-color);
+}
+
 .file-row-previews {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
@@ -580,10 +681,11 @@ function isFileSelected(selectedFileIds, fileId) {
 
 .preview-panel {
   min-width: 0;
-  padding: 0.75rem;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 8px;
-  background: var(--p-content-background);
+  padding: 0.25rem 0;
+  border: none;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
 }
 
 .preview-panel--trace {
@@ -592,8 +694,7 @@ function isFileSelected(selectedFileIds, fileId) {
 
 .preview-panel--acf {
   align-self: stretch;
-  min-height: 180px;
-  max-height: 240px;
+  min-height: 220px;
   overflow: hidden;
 }
 
@@ -602,6 +703,23 @@ function isFileSelected(selectedFileIds, fileId) {
   color: var(--p-text-muted-color);
   font-size: 0.85rem;
   font-weight: 700;
+}
+
+.empty-preview {
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--p-text-muted-color);
+  border: 1px dashed var(--p-content-border-color);
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.empty-preview i {
+  font-size: 1.25rem;
 }
 
 .file-row-actions {
@@ -618,6 +736,50 @@ function isFileSelected(selectedFileIds, fileId) {
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+}
+
+:deep(.bulk-toolbar .p-toolbar-start) {
+  width: 100%;
+  flex-wrap: nowrap;
+  overflow: visible;
+}
+
+:deep(.section-toolbar),
+:deep(.bulk-toolbar) {
+  padding: 0.55rem 0.75rem;
+}
+
+:deep(.bulk-toolbar) {
+  min-height: 2.75rem;
+  padding: 0.35rem 0.75rem;
+}
+
+:deep(.bulk-toolbar .p-toolbar-start),
+:deep(.bulk-toolbar .p-toolbar-end) {
+  gap: 0.5rem;
+}
+
+:deep(.bulk-toolbar .p-button) {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+
+:deep(.bulk-toolbar .p-select) {
+  min-height: 2rem;
+  max-width: 180px;
+  min-width: 140px;
+}
+
+:deep(.bulk-toolbar .p-select-label) {
+  padding-block: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.bulk-toolbar .p-tag) {
+  padding-block: 0.15rem;
 }
 
 :deep(.p-fieldset) {
@@ -637,12 +799,27 @@ function isFileSelected(selectedFileIds, fileId) {
 }
 
 :deep(.preview-panel--acf .trace-preview-wrapper--thumb) {
-  height: 160px;
+  height: 180px;
 }
 
 @media (max-width: 1200px) {
   .file-row-actions {
     justify-content: flex-end;
+  }
+}
+
+@media (max-width: 900px) {
+  .bulk-toolbar-row {
+    flex-wrap: wrap;
+  }
+
+  .bulk-toolbar-actions {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+
+  :deep(.bulk-toolbar .p-toolbar-start) {
+    flex-wrap: wrap;
   }
 }
 

@@ -6,6 +6,7 @@ import {
   LineElement,
   PointElement,
   LinearScale,
+  LogarithmicScale,
   CategoryScale,
   Legend,
   Tooltip,
@@ -16,6 +17,7 @@ ChartJS.register(
   LineElement,
   PointElement,
   LinearScale,
+  LogarithmicScale,
   CategoryScale,
   Legend,
   Tooltip
@@ -29,6 +31,14 @@ const props = defineProps({
   variant: {
     type: String,
     default: "thumb",
+  },
+  xScale: {
+    type: String,
+    default: "category",
+  },
+  yMin: {
+    type: Number,
+    default: null,
   },
 })
 
@@ -71,10 +81,13 @@ const chartData = computed(() => {
   const series = props.preview.series ?? []
 
   return {
-    labels: x,
+    labels: props.xScale === "logarithmic" ? undefined : x,
     datasets: series.map((s, i) => ({
       label: s.label,
-      data: s.y,
+      data: props.xScale === "logarithmic"
+        ? (s.y ?? []).map((y, index) => ({ x: Number(x[index]), y }))
+          .filter((point) => Number.isFinite(point.x) && point.x > 0)
+        : s.y,
       borderWidth: 1.5,
       pointRadius: 0,
       tension: 0,
@@ -89,7 +102,7 @@ const chartOptions = computed(() => ({
   color: chartTheme.value.text,
   plugins: {
     legend: {
-      display: true,
+      display: false,
       position: "bottom",
       labels: {
         color: chartTheme.value.text,
@@ -105,22 +118,32 @@ const chartOptions = computed(() => ({
   layout: {
     padding: {
       top: 10,
-      bottom: 10,
+      bottom: 4,
       left: 5,
       right: 5,
     },
   },
   scales: {
     x: {
+      type: props.xScale,
       title: {
         display: true,
-        text: "Time (s)",
+        text: `Time (${props.preview?.x_unit ?? "s"})`,
         color: chartTheme.value.mutedText,
       },
       ticks: {
         color: chartTheme.value.mutedText,
         maxTicksLimit: 6,
         callback(value) {
+          if (props.xScale === "logarithmic") {
+            const num = Number(value)
+            if (!Number.isFinite(num)) {
+              return String(value)
+            }
+
+            return num >= 1 ? String(Math.round(num)) : num.toPrecision(1)
+          }
+
           const label = this.getLabelForValue(value)
           const num = Number(label)
 
@@ -147,7 +170,8 @@ const chartOptions = computed(() => ({
       grid: {
         color: chartTheme.value.border,
       },
-      beginAtZero: true,
+      beginAtZero: props.yMin === null,
+      min: props.yMin ?? undefined,
     },
   },
 }))

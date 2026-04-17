@@ -1,6 +1,7 @@
 <script setup>
 
-  import { ref, onMounted, computed } from "vue"
+  import { ref, onMounted, computed, watch } from "vue"
+  import { useRoute, useRouter } from "vue-router"
   import axios from "axios"
 
   import DatasetDetailPanel from "./components/DatasetDetailPanel.vue"
@@ -18,6 +19,9 @@
 
 
 
+
+  const route = useRoute()
+  const router = useRouter()
 
   const datasets = ref([])
 
@@ -64,6 +68,7 @@
   const acfTauMaxUs = ref(0)
   const newTagName = ref("")
   const sidebarCollapsed = ref(false)
+  const syncingRoute = ref(false)
 
   const detailBinWidthOptions = [
     { label: '1 ms', value: 1 },
@@ -92,7 +97,7 @@
         label: "Datasets",
         icon: "pi pi-database",
         command: () => {
-          selectedFile.value = null
+          router.push({ name: "datasets" })
         },
       },
     ]
@@ -102,7 +107,10 @@
         label: selectedDataset.value.name,
         icon: "pi pi-folder-open",
         command: () => {
-          selectedFile.value = null
+          router.push({
+            name: "dataset-detail",
+            params: { datasetId: selectedDataset.value.id },
+          })
         },
       })
     }
@@ -115,18 +123,6 @@
     }
 
     return items
-  })
-
-  const workspaceTitle = computed(() => {
-    if (selectedFile.value) return selectedFile.value.filename
-    if (selectedDataset.value) return selectedDataset.value.name
-    return "Photon Data Hub"
-  })
-
-  const workspaceSubtitle = computed(() => {
-    if (selectedFile.value) return selectedDataset.value?.name || "Selected dataset"
-    if (selectedDataset.value) return selectedDataset.value.description || "No description available."
-    return "Choose a dataset from the navigation."
   })
 
   const menuItems = computed(() => [
@@ -304,7 +300,7 @@ function sortDatasetFiles(files) {
   })
 }
 
-  async function selectDataset(datasetId) {
+  async function loadDatasetDetail(datasetId, { clearSelectedFile = true } = {}) {
   loadingDatasetDetail.value = true
   errorMessage.value = ""
 
@@ -334,10 +330,12 @@ function sortDatasetFiles(files) {
     }
     selectedFileIds.value = []
     moveTargetDatasetId.value = ""
-    selectedFile.value = null
-    fileDetailTrace.value = null
-    fileAcfTrace.value = null
-    selectedDetailView.value = "trace"
+    if (clearSelectedFile) {
+      selectedFile.value = null
+      fileDetailTrace.value = null
+      fileAcfTrace.value = null
+      selectedDetailView.value = "trace"
+    }
   } catch (error) {
     console.error("Fehler beim Laden des Dataset-Details:", error)
     errorMessage.value = "Dataset-Details konnten nicht geladen werden."
@@ -352,8 +350,30 @@ function sortDatasetFiles(files) {
   }
 }
 
+  async function selectDataset(datasetId) {
+    await router.push({
+      name: "dataset-detail",
+      params: { datasetId },
+    })
+  }
+
+  async function reloadCurrentView() {
+    await loadDatasets()
+
+    const datasetId = route.params.datasetId
+    if (!datasetId) return
+
+    const fileId = route.params.fileId
+    await loadDatasetDetail(datasetId, { clearSelectedFile: !fileId })
+
+    if (fileId) {
+      await openFileDetailById(fileId)
+    }
+  }
+
   onMounted(async () => {
     await loadDatasets()
+    await syncRouteToState()
   })
 
   async function downloadFile(fileId) {
@@ -412,7 +432,7 @@ async function deleteFile(fileId) {
     await axios.delete(`http://localhost:8000/files/${fileId}`)
 
     if (selectedDataset.value) {
-      await selectDataset(selectedDataset.value.id)
+      await loadDatasetDetail(selectedDataset.value.id)
     }
 
     await loadDatasets()
@@ -436,8 +456,10 @@ async function deleteDataset(datasetId) {
     await axios.delete(`http://localhost:8000/datasets/${datasetId}`)
 
     selectedDataset.value = null
+    clearFileDetailState()
 
     await loadDatasets()
+    await router.push({ name: "datasets" })
   } catch (error) {
     console.error("Fehler beim Löschen des Datasets:", error)
     errorMessage.value = "Dataset konnte nicht gelöscht werden."
@@ -491,7 +513,7 @@ async function deleteSelectedFiles() {
 
     selectedFileIds.value = []
 
-    await selectDataset(selectedDataset.value.id)
+    await loadDatasetDetail(selectedDataset.value.id)
     await loadDatasets()
   } catch (error) {
     console.error("Fehler beim Löschen ausgewählter Dateien:", error)
@@ -526,7 +548,7 @@ async function moveSelectedFiles() {
     selectedFileIds.value = []
     moveTargetDatasetId.value = ""
 
-    await selectDataset(selectedDataset.value.id)
+    await loadDatasetDetail(selectedDataset.value.id)
     await loadDatasets()
   } catch (error) {
     console.error("Fehler beim Verschieben ausgewählter Dateien:", error)
@@ -554,7 +576,7 @@ async function copySelectedFiles() {
       target_dataset_id: moveTargetDatasetId.value,
     })
 
-    await selectDataset(selectedDataset.value.id)
+    await loadDatasetDetail(selectedDataset.value.id)
     await loadDatasets()
   } catch (error) {
     console.error("Copy failed:", error)
@@ -668,7 +690,7 @@ async function applyUploadMetadataSuggestions() {
     uploadMetadataSuggestions.value = []
 
     if (selectedDataset.value) {
-      await selectDataset(selectedDataset.value.id)
+      await loadDatasetDetail(selectedDataset.value.id)
     }
   } catch (error) {
     console.error("Detected metadata could not be applied:", error)
@@ -697,7 +719,7 @@ async function updateSelectedMetadata() {
       objective: bulkObjectiveDraft.value || null,
     })
 
-    await selectDataset(selectedDataset.value.id)
+    await loadDatasetDetail(selectedDataset.value.id)
   } catch (error) {
     console.error("Fehler beim Bulk-Update der Metadaten:", error)
     errorMessage.value = "Metadaten konnten nicht gesammelt gesetzt werden."
@@ -768,7 +790,7 @@ async function handleFileUpload(event) {
 
     uploadMetadataSuggestions.value = detectedSuggestions
 
-    await selectDataset(selectedDataset.value.id)
+    await loadDatasetDetail(selectedDataset.value.id)
     await loadDatasets()
   } catch (error) {
     console.error("Upload fehlgeschlagen:", error)
@@ -808,6 +830,32 @@ async function loadFileDetailTrace(fileId) {
 
 
 async function openFileDetail(file) {
+  if (!selectedDataset.value) return
+
+  await router.push({
+    name: "file-detail",
+    params: {
+      datasetId: selectedDataset.value.id,
+      fileId: file.id,
+    },
+  })
+}
+
+async function openFileDetailById(fileId) {
+  if (!selectedDataset.value) return
+
+  const file = selectedDataset.value.files.find(
+    (datasetFile) => String(datasetFile.id) === String(fileId)
+  )
+
+  if (!file) {
+    selectedFile.value = null
+    fileDetailTrace.value = null
+    fileAcfTrace.value = null
+    errorMessage.value = "Datei konnte in diesem Dataset nicht gefunden werden."
+    return
+  }
+
   selectedFile.value = file
   selectedDetailView.value = "trace"
   fileAcfTrace.value = null
@@ -818,11 +866,61 @@ async function openFileDetail(file) {
   await loadFileDetailTrace(file.id)
 }
 
-function closeFileDetail() {
+async function closeFileDetail() {
+  if (selectedDataset.value) {
+    await router.push({
+      name: "dataset-detail",
+      params: { datasetId: selectedDataset.value.id },
+    })
+    return
+  }
+
+  await router.push({ name: "datasets" })
+}
+
+function clearFileDetailState() {
   selectedFile.value = null
   fileDetailTrace.value = null
   fileAcfTrace.value = null
 }
+
+async function syncRouteToState() {
+  if (syncingRoute.value) return
+
+  syncingRoute.value = true
+
+  try {
+    const datasetId = route.params.datasetId
+    const fileId = route.params.fileId
+
+    if (!datasetId) {
+      selectedDataset.value = null
+      selectedFileIds.value = []
+      moveTargetDatasetId.value = ""
+      clearFileDetailState()
+      return
+    }
+
+    if (String(selectedDataset.value?.id) !== String(datasetId)) {
+      await loadDatasetDetail(datasetId, { clearSelectedFile: !fileId })
+    } else if (!fileId) {
+      clearFileDetailState()
+    }
+
+    if (fileId) {
+      await openFileDetailById(fileId)
+    }
+  } finally {
+    syncingRoute.value = false
+  }
+}
+
+watch(
+  () => route.fullPath,
+  async () => {
+    await syncRouteToState()
+  }
+)
 
 async function saveFileNotes() {
   if (!selectedFile.value) return
@@ -960,22 +1058,6 @@ async function loadFileAcfTrace(fileId) {
         </template>
       </Card>
 
-      <Card v-if="!sidebarCollapsed" class="sidebar-card sidebar-info-card">
-        <template #title>Workspace</template>
-        <template #content>
-          <div class="sidebar-meta-list">
-            <Tag
-              :value="selectedDataset ? `${selectedDatasetFileCount} files` : 'No dataset selected'"
-              :severity="selectedDataset ? 'success' : 'secondary'"
-              rounded
-            />
-            <span v-if="selectedDataset" class="sidebar-selected-name">
-              {{ selectedDataset.name }}
-            </span>
-          </div>
-        </template>
-      </Card>
-
       <div v-else class="sidebar-rail">
         <Button
           icon="pi pi-database"
@@ -1015,7 +1097,7 @@ async function loadFileAcfTrace(fileId) {
             icon="pi pi-refresh"
             variant="outlined"
             :loading="loadingDatasets || loadingDatasetDetail"
-            @click="selectedDataset ? selectDataset(selectedDataset.id) : loadDatasets()"
+            @click="reloadCurrentView"
           />
         </template>
       </Toolbar>
@@ -1025,23 +1107,6 @@ async function loadFileAcfTrace(fileId) {
       </Message>
 
       <Card class="workspace-shell">
-        <template #title>
-          <div class="workspace-header">
-            <div class="workspace-heading">
-              <h1 class="workspace-title">{{ workspaceTitle }}</h1>
-              <p class="workspace-subtitle">{{ workspaceSubtitle }}</p>
-            </div>
-
-            <Button
-              v-if="selectedFile"
-              label="Back to dataset"
-              icon="pi pi-arrow-left"
-              variant="outlined"
-              @click="closeFileDetail"
-            />
-          </div>
-        </template>
-
         <template #content>
           <div v-if="!selectedDataset" class="empty-state-content">
             <i class="pi pi-database empty-icon"></i>
@@ -1236,23 +1301,11 @@ async function loadFileAcfTrace(fileId) {
   margin: 0;
 }
 
-.card-title-row,
-.sidebar-meta-list {
+.card-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-}
-
-.sidebar-meta-list {
-  align-items: flex-start;
-  flex-direction: column;
-}
-
-.sidebar-selected-name {
-  color: var(--p-text-muted-color);
-  font-weight: 600;
-  word-break: break-word;
 }
 
 .sidebar-spinner {
@@ -1279,6 +1332,9 @@ async function loadFileAcfTrace(fileId) {
 .app-main {
   padding: 1.25rem clamp(1rem, 2vw, 2.5rem) 2rem;
   min-width: 0;
+  width: min(100%, 1760px);
+  justify-self: center;
+  box-sizing: border-box;
 }
 
 .main-toolbar,
@@ -1293,40 +1349,13 @@ async function loadFileAcfTrace(fileId) {
   background: var(--p-content-background);
 }
 
-.workspace-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.workspace-heading {
-  min-width: 0;
-}
-
-.workspace-title {
-  margin: 0;
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--p-text-color);
-  overflow-wrap: anywhere;
-}
-
-.workspace-subtitle {
-  margin: 0.35rem 0 0;
-  color: var(--p-text-muted-color);
-  font-size: 1rem;
-  overflow-wrap: anywhere;
-}
-
 .workspace-body {
   min-width: 0;
 }
 
 .workspace-body--file {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+  grid-template-columns: minmax(0, calc(75% - 0.625rem)) minmax(260px, calc(25% - 0.625rem));
   gap: 1.25rem;
   align-items: start;
 }
@@ -1347,6 +1376,7 @@ async function loadFileAcfTrace(fileId) {
   color: var(--p-primary-color);
 }
 
+:deep(.main-toolbar .p-toolbar-start),
 :deep(.main-toolbar .p-toolbar-end) {
   display: flex;
   align-items: center;
@@ -1413,7 +1443,7 @@ async function loadFileAcfTrace(fileId) {
   font-weight: 600;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 980px) {
   .workspace-body--file {
     grid-template-columns: 1fr;
   }
@@ -1433,8 +1463,5 @@ async function loadFileAcfTrace(fileId) {
     padding: 1rem;
   }
 
-  .workspace-title {
-    font-size: 1.6rem;
-  }
 }
 </style>
