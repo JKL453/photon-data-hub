@@ -1212,23 +1212,25 @@ async function loadFileAcfTrace(fileId) {
 
 
 <style scoped>
+/* ── Shell layout ───────────────────────────────────────────────── */
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 288px minmax(0, 1fr);
   background: var(--p-surface-ground, var(--p-content-background));
   color: var(--p-text-color);
   transition: grid-template-columns 0.18s ease;
 }
 
 .app-shell--sidebar-collapsed {
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: 68px minmax(0, 1fr);
 }
 
+/* ── Sidebar ────────────────────────────────────────────────────── */
 .app-sidebar {
   background: var(--p-content-background);
   color: var(--p-text-color);
-  padding: 1rem;
+  padding: 1.1rem 0.9rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -1237,15 +1239,16 @@ async function loadFileAcfTrace(fileId) {
 }
 
 .app-shell--sidebar-collapsed .app-sidebar {
-  padding: 0.75rem 0.5rem;
+  padding: 0.9rem 0.6rem;
   align-items: center;
 }
 
+/* ── Brand ──────────────────────────────────────────────────────── */
 .brand-block {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.1rem 0 0.25rem;
+  padding: 0.2rem 0.2rem 0.3rem;
 }
 
 .app-shell--sidebar-collapsed .brand-block {
@@ -1259,33 +1262,44 @@ async function loadFileAcfTrace(fileId) {
 }
 
 .brand-icon-wrap {
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--p-primary-color) 12%, var(--p-content-background));
-  border: 1px solid var(--p-content-border-color);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--p-primary-color) 22%, var(--p-content-background)),
+    color-mix(in srgb, var(--p-primary-color) 9%, var(--p-content-background))
+  );
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 28%, transparent);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--p-primary-color) 12%, transparent);
   flex: 0 0 auto;
 }
 
 .brand-icon {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   color: var(--p-primary-color);
 }
 
 .brand-title {
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--p-text-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .brand-subtitle {
-  font-size: 0.82rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
   color: var(--p-text-muted-color);
+  margin-top: 0.1rem;
 }
 
 .sidebar-toggle {
@@ -1309,16 +1323,16 @@ async function loadFileAcfTrace(fileId) {
 }
 
 .sidebar-spinner {
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
 }
 
 .sidebar-card {
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid var(--p-content-border-color);
   overflow: hidden;
   box-shadow: none;
-  background: color-mix(in srgb, var(--p-content-background) 94%, var(--p-text-color) 6%);
+  background: color-mix(in srgb, var(--p-content-background) 97%, var(--p-text-color) 3%);
 }
 
 .sidebar-rail {
@@ -1329,8 +1343,9 @@ async function loadFileAcfTrace(fileId) {
   padding-top: 0.25rem;
 }
 
+/* ── Main area ──────────────────────────────────────────────────── */
 .app-main {
-  padding: 1.25rem clamp(1rem, 2vw, 2.5rem) 2rem;
+  padding: 1.25rem clamp(1rem, 2vw, 2.25rem) 2.5rem;
   min-width: 0;
   width: min(100%, 1760px);
   justify-self: center;
@@ -1343,9 +1358,9 @@ async function loadFileAcfTrace(fileId) {
 }
 
 .workspace-shell {
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid var(--p-content-border-color);
-  box-shadow: var(--p-card-shadow);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.04);
   background: var(--p-content-background);
 }
 
@@ -1355,27 +1370,50 @@ async function loadFileAcfTrace(fileId) {
 
 .workspace-body--file {
   display: grid;
-  grid-template-columns: minmax(0, calc(75% - 0.625rem)) minmax(260px, calc(25% - 0.625rem));
-  gap: 1.25rem;
+  grid-template-columns: minmax(0, calc(75% - 0.75rem)) minmax(260px, calc(25% - 0.75rem));
+  gap: 1.5rem;
   align-items: start;
 }
 
+/* ── Empty state ────────────────────────────────────────────────── */
 .empty-state-content {
-  min-height: 320px;
+  min-height: 340px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
+  gap: 1rem;
   text-align: center;
   color: var(--p-text-muted-color);
 }
 
-.empty-icon {
-  font-size: 2rem;
-  color: var(--p-primary-color);
+.empty-state-content h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--p-text-color);
 }
 
+.empty-state-content p {
+  font-size: 0.9rem;
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.empty-icon {
+  font-size: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  color: var(--p-primary-color);
+  background: color-mix(in srgb, var(--p-primary-color) 8%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--p-primary-color) 22%, transparent);
+}
+
+/* ── Deep overrides ─────────────────────────────────────────────── */
 :deep(.main-toolbar .p-toolbar-start),
 :deep(.main-toolbar .p-toolbar-end) {
   display: flex;
@@ -1399,32 +1437,35 @@ async function loadFileAcfTrace(fileId) {
   background: transparent;
   color: var(--p-text-color);
   border-radius: 8px;
-  padding: 0.8rem 0.9rem;
+  padding: 0.7rem 0.85rem;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
 :deep(.dataset-menu .p-panelmenu-header-link:hover) {
-  background: color-mix(in srgb, var(--p-content-background) 88%, var(--p-text-color) 12%);
+  background: color-mix(in srgb, var(--p-primary-color) 7%, transparent);
 }
 
 :deep(.dataset-menu .p-panelmenu-content) {
   background: transparent;
   border: none;
-  padding-top: 0.35rem;
+  padding-top: 0.25rem;
 }
 
 :deep(.dataset-menu .p-menuitem-link) {
   color: var(--p-text-muted-color);
-  border-radius: 8px;
-  padding: 0.7rem 0.8rem;
+  border-radius: 7px;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.88rem;
 }
 
 :deep(.dataset-menu .p-menuitem-link:hover) {
-  background: color-mix(in srgb, var(--p-content-background) 88%, var(--p-text-color) 12%);
+  background: color-mix(in srgb, var(--p-primary-color) 7%, transparent);
   color: var(--p-text-color);
 }
 
 :deep(.sidebar-card .p-card-body) {
-  padding: 1rem;
+  padding: 0.85rem;
 }
 
 :deep(.sidebar-card .p-card) {
@@ -1443,6 +1484,7 @@ async function loadFileAcfTrace(fileId) {
   font-weight: 600;
 }
 
+/* ── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 980px) {
   .workspace-body--file {
     grid-template-columns: 1fr;
@@ -1462,6 +1504,5 @@ async function loadFileAcfTrace(fileId) {
   .app-main {
     padding: 1rem;
   }
-
 }
 </style>

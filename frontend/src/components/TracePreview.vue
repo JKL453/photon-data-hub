@@ -116,22 +116,18 @@ const chartOptions = computed(() => ({
     },
   },
   layout: {
-    padding: {
-      top: 10,
-      bottom: 4,
-      left: 5,
-      right: 5,
-    },
+    padding: props.variant === "thumb"
+      ? { top: 6, bottom: 4, left: 4, right: 4 }
+      : { top: 10, bottom: 4, left: 5, right: 5 },
   },
   scales: {
     x: {
       type: props.xScale,
       title: {
-        display: true,
-        text: `Time (${props.preview?.x_unit ?? "s"})`,
-        color: chartTheme.value.mutedText,
+        display: false,
       },
       ticks: {
+        display: props.variant !== "thumb",
         color: chartTheme.value.mutedText,
         maxTicksLimit: 6,
         callback(value) {
@@ -160,11 +156,10 @@ const chartOptions = computed(() => ({
     },
     y: {
       title: {
-        display: true,
-        text: "Counts / bin",
-        color: chartTheme.value.mutedText,
+        display: false,
       },
       ticks: {
+        display: props.variant !== "thumb",
         color: chartTheme.value.mutedText,
       },
       grid: {
