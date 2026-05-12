@@ -424,13 +424,14 @@ function fileMetadataItems(file) {
               </div>
             </div>
 
-            <!-- Previews: trace (wider) + ACF -->
+            <!-- Previews: trace (wider, landscape) + ACF (compact, near-square) -->
             <div class="file-row-previews">
               <div class="preview-col preview-col--trace">
                 <TracePreview
                   v-if="file.tracePreview"
                   :preview="file.tracePreview.preview_data"
                   variant="thumb"
+                  plot-kind="trace"
                 />
                 <div v-else class="thumb-empty">
                   <i class="pi pi-chart-line"></i>
@@ -441,6 +442,7 @@ function fileMetadataItems(file) {
                   v-if="file.acfPreview"
                   :preview="file.acfPreview.preview_data"
                   variant="thumb"
+                  plot-kind="acf"
                   x-scale="logarithmic"
                   :y-min="1"
                 />
@@ -564,7 +566,7 @@ function fileMetadataItems(file) {
   gap: 1rem;
 }
 
-/* ── Section header row (replaces Toolbar) ───────────────────────── */
+/* ── Section header row ───────────────────────────────────────────── */
 .section-header-row {
   display: flex;
   align-items: center;
@@ -680,6 +682,7 @@ function fileMetadataItems(file) {
 .file-row {
   display: flex;
   flex-direction: column;
+  width: 100%;
   border: 1px solid var(--p-content-border-color);
   border-radius: 8px;
   background: var(--p-content-background);
@@ -687,6 +690,7 @@ function fileMetadataItems(file) {
   overflow: hidden;
   transition: border-color 0.13s ease, box-shadow 0.13s ease;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .file-row:hover {
@@ -704,7 +708,8 @@ function fileMetadataItems(file) {
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  padding: 0.55rem 0.75rem 0.55rem 0.65rem;
+  padding: 0.55rem 0.75rem 0.7rem 0.65rem;
+  background: var(--p-content-background);
 }
 
 .file-check {
@@ -788,24 +793,36 @@ function fileMetadataItems(file) {
   opacity: 1;
 }
 
-/* ── Row previews (full-width below header) ──────────────────────── */
+/* ── Row previews ────────────────────────────────────────────────── */
 .file-row-previews {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  border-top: 1px solid var(--p-content-border-color);
-  overflow: hidden;
-}
-
-.preview-col {
-  height: 110px;
-  overflow: hidden;
-  background: var(--p-surface-ground);
   display: flex;
   align-items: stretch;
+  overflow: hidden;
+  height: 200px;
+  padding: 0 0.65rem 0.65rem;
+  gap: 0.5rem;
+  background: var(--p-content-background);
 }
 
+/* Trace: landscape, fills all remaining space */
+.preview-col--trace {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--p-surface-ground) 70%, var(--p-content-background) 30%);
+}
+
+/* ACF: slightly wider than tall, ~4:3 ratio (height=200px → width≈260px) */
 .preview-col--acf {
-  border-left: 1px solid var(--p-content-border-color);
+  flex: 0 0 260px;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--p-surface-ground) 70%, var(--p-content-background) 30%);
 }
 
 .thumb-empty {
@@ -828,10 +845,11 @@ function fileMetadataItems(file) {
 }
 
 :deep(.preview-col .trace-preview-wrapper--thumb) {
-  height: 110px;
   width: 100%;
+  height: 100%;
 }
 
+/* ── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .file-list-controls {
     flex-direction: column;
@@ -841,19 +859,12 @@ function fileMetadataItems(file) {
 
 @media (max-width: 600px) {
   .file-row-previews {
-    grid-template-columns: 1fr;
-  }
-
-  .preview-col {
-    height: 80px;
-  }
-
-  :deep(.preview-col .trace-preview-wrapper--thumb) {
-    height: 80px;
+    height: 140px;
+    padding: 0 0.5rem 0.5rem;
   }
 
   .preview-col--acf {
-    display: none;
+    flex: 0 0 180px;
   }
 }
 </style>
